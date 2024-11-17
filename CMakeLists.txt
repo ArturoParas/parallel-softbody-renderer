@@ -1,4 +1,4 @@
-cmake_minimum_required(3.18)
+cmake_minimum_required(VERSION 3.18)
 project(tensileflow LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -10,17 +10,20 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-set(
-  SOURCES
-  src/main.cpp
+include_directories(./include)
+
+add_library(
+  renderer STATIC
+  # src/
 )
-set(
-  HEADERS
-  # include/...
+add_library(
+  softbody_sim STATIC
+  # src/
 )
 
-add_executable(
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(
   ${PROJECT_NAME}
-  ${SOURCES}
-  ${HEADERS}
+  renderer
+  softbody_sim
 )
