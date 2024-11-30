@@ -3,7 +3,7 @@ class Circle:
   diameter = rad * 2
   mass = 1
   g = 0.1
-  restitution = 0
+  restitution = 1
   norm_restitution = 0.5 * restitution + 0.5
 
   def __init__(self, x, y, dx=0, dy=0):
