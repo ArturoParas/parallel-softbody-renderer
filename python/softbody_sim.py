@@ -10,7 +10,11 @@ pg.init()
 surface = pg.display.set_mode((0, 0))
 width, height = pg.display.get_surface().get_size()
 
-occ = Grid(width, height, [Circle(400, 400), Circle(405, 425), Circle(425, 425), Circle(370, 400), Circle(360, 390), Circle(370, 360), Circle(350, 400), Circle(351, 440), Circle(315, 403), Circle(300, 450), Circle(305, 490), Circle(340, 500), Circle(360, 480), Circle(400, 483)])
+# occ = Grid(width, height, [Circle(400, 400), Circle(405, 425), Circle(425, 425), Circle(370, 400),
+#                            Circle(360, 390), Circle(370, 360), Circle(350, 400), Circle(351, 440),
+#                            Circle(315, 403), Circle(300, 450), Circle(305, 490), Circle(340, 500),
+#                            Circle(360, 480), Circle(400, 483), Circle(600, 400, -10, 0)])
+occ = Grid(width, height, [Circle(0, 0, 10, 0), Circle(width - 1, 1, -10, 0)])
 
 while True:
 
@@ -33,5 +37,5 @@ while True:
 
   pg.display.update()
 
-  sleep(1)
-  occ.correct_collisions()
+  sleep(0.01)
+  occ.update()
