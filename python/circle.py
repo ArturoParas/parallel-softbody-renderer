@@ -2,8 +2,8 @@ class Circle:
   rad = 25
   diameter = rad * 2
   mass = 1
-  g = 0.1
-  restitution = 1
+  g = 0
+  restitution = 0.96
   norm_restitution = 0.5 * restitution + 0.5
 
   def __init__(self, x, y, dx=0, dy=0):
@@ -56,11 +56,11 @@ class Circle:
     circle.y += circle.dy
 
   @staticmethod
-  def move(circle, vec):
-    circle.x += vec[0]
-    circle.y += vec[1]
+  def move(circle, dpos):
+    circle.x += dpos[0]
+    circle.y += dpos[1]
 
   @staticmethod
-  def update_velocity(circle, vec):
-    circle.dx += vec[0]
-    circle.dy += vec[1]
+  def update_velocity(circle, dvel):
+    circle.dx += dvel[0]
+    circle.dy += dvel[1]
