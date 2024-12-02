@@ -9,6 +9,8 @@ from grid import Grid
 
 pg.init()
 
+dt = 0.01
+
 surface = pg.display.set_mode((0, 0))
 width, height = pg.display.get_surface().get_size()
 height -= 80
@@ -20,16 +22,23 @@ height -= 80
 # occ = Grid(width, height, [Circle(0, 0, 10, 0), Circle(width - 1, 1, -10, 0)])
 
 # Try with 0 g and 0.9 to 0.96 restitution for accurate billiards!
-x_center = width - 401
-y_center = (height - 1) / 2
-dx = 25 * (3 ** 0.5)
-dy = 25
-occ = Grid(width, height, [Circle(200, y_center, 50), Circle(x_center, y_center),
-                           Circle(x_center, y_center - 50), Circle(x_center, y_center + 50),
-                           Circle(x_center - dx, y_center - dy), Circle(x_center - dx, y_center + dy),
-                           Circle(x_center + dx, y_center - dy), Circle(x_center + dx, y_center + dy),
-                           Circle(x_center + dx, y_center - 3 * dy), Circle(x_center + dx, y_center + 3 * dy),
-                           Circle(x_center - 2 * dx, y_center)])
+# x_center = width - 401
+# y_center = (height - 1) / 2
+# dx = 25 * (3 ** 0.5)
+# dy = 25
+# occ = Grid(width, height, [Circle(200, y_center, 50), Circle(x_center, y_center),
+#                            Circle(x_center, y_center - 50), Circle(x_center, y_center + 50),
+#                            Circle(x_center - dx, y_center - dy), Circle(x_center - dx, y_center + dy),
+#                            Circle(x_center + dx, y_center - dy), Circle(x_center + dx, y_center + dy),
+#                            Circle(x_center + dx, y_center - 3 * dy), Circle(x_center + dx, y_center + 3 * dy),
+#                            Circle(x_center - 2 * dx, y_center)])
+
+occ = Grid(width, height, [], collision_iters=8)
+ball_dt = 0.1
+ball_frames = ball_dt / dt
+frames = 0
+max_balls = 200
+num_balls = 0
 
 while True:
 
@@ -52,5 +61,10 @@ while True:
 
   pg.display.update()
 
-  sleep(0.01)
+  sleep(dt)
   occ.update()
+  if frames == ball_frames and num_balls < max_balls:
+    occ.insert_circle(Circle(25, 25, 30))
+    num_balls += 1
+    frames = 0
+  frames += 1

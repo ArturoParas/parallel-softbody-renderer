@@ -2,9 +2,10 @@ class Circle:
   rad = 25
   diameter = rad * 2
   mass = 1
-  g = 0
-  restitution = 0.96
+  g = 0.5
+  restitution = 0.5
   norm_restitution = 0.5 * restitution + 0.5
+  bounce_thresh = 1
 
   def __init__(self, x, y, dx=0, dy=0):
     self.x = x
@@ -28,7 +29,10 @@ class Circle:
       pos_norm = [pos_diff[0] / dist, pos_diff[1] / dist]
       separation_vec = [pos_norm[0] * move_amt, pos_norm[1] * move_amt]
       vel_rel = (circle2.dx - circle1.dx) * pos_norm[0] + (circle2.dy - circle1.dy) * pos_norm[1]
-      vel_norm = [vel_rel * pos_norm[0] * Circle.norm_restitution, vel_rel * pos_norm[1] * Circle.norm_restitution]
+      if abs(vel_rel) >= Circle.bounce_thresh:
+        vel_norm = [vel_rel * pos_norm[0] * Circle.norm_restitution, vel_rel * pos_norm[1] * Circle.norm_restitution]
+      else:
+        vel_norm = [-circle1.dx, -circle2.dx]
 
     return separation_vec, vel_norm
 

@@ -35,16 +35,28 @@ class Grid:
   def bounce_off_border(self, circle):
     if circle.x < Circle.rad:
       circle.x = Circle.rad
-      circle.dx = abs(circle.dx) * Circle.restitution
+      if abs(circle.dx) >= Circle.bounce_thresh:
+        circle.dx = abs(circle.dx) * Circle.restitution
+      else:
+        circle.dx = 0
     elif circle.x > self.width - Circle.rad:
       circle.x = self.width - Circle.rad
-      circle.dx = -abs(circle.dx) * Circle.restitution
+      if abs(circle.dx) >= Circle.bounce_thresh:
+        circle.dx = -abs(circle.dx) * Circle.restitution
+      else:
+        circle.dx = 0
     if circle.y < Circle.rad:
       circle.y = Circle.rad
-      circle.dy = abs(circle.dy) * Circle.restitution
+      if abs(circle.dy) >= Circle.bounce_thresh:
+        circle.dy = abs(circle.dy) * Circle.restitution
+      else:
+        circle.dy = 0
     elif circle.y > self.height - Circle.rad:
       circle.y = self.height - Circle.rad
-      circle.dy = -abs(circle.dy) * Circle.restitution
+      if abs(circle.dy) >= Circle.bounce_thresh:
+        circle.dy = -abs(circle.dy) * Circle.restitution
+      else:
+        circle.dy = 0
 
   def separate_from_border(self, circle):
     circle.x = min(max(circle.x, Circle.rad), self.width - Circle.rad)
