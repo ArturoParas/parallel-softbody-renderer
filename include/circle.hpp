@@ -17,21 +17,25 @@ public:
 
   Circle(const Vec2& p_prev, const Vec2& p_curr);
 
-  Vec2 get_accel();
-
   void update_pos(const float dt2);
 
   void resolve_collision(const Circle& circle);
 
   void update_pos_resolved();
 
-  float x() const;
-  float y() const;
+  Vec2 get_accel() const;
+  Vec2 get_pos() const;
+  float get_x() const;
+  float get_y() const;
+
+  bool is_eq(const Circle& circle);
+
+  void clamp_p_temp(const Vec2& min, const Vec2& max);
 
 private:
   Vec2 p_curr_;
   Vec2 p_prev_;
-  Vec2 p_res_;
+  Vec2 p_temp_;
 };
 
 } // namespace softbody_sim

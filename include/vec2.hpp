@@ -12,8 +12,10 @@ public:
   void set(const Vec2& vec);
   void set(const float x, const float y);
 
-  float x() const;
-  float y() const;
+  float get_x() const;
+  float get_y() const;
+
+  bool is_eq(const Vec2& vec);
 
   void vec_add(const Vec2& vec);
 
@@ -22,6 +24,8 @@ public:
   void scalar_mul(const float scalar);
 
   float dot(const Vec2& vec);
+
+  void clamp(const Vec2& min, const Vec2& max);
 
 private:
   float x_;

@@ -5,12 +5,7 @@
 using namespace softbody_sim;
 
 Circle::Circle(const Vec2& p_prev, const Vec2& p_curr)
-  : p_prev_(p_prev), p_curr_(p_curr), p_res_(p_curr) {};
-
-Vec2 Circle::get_accel()
-{
-  return Vec2(0, Circle::g);
-}
+  : p_prev_(p_prev), p_curr_(p_curr), p_temp_(p_curr) {};
 
 void Circle::update_pos(const float dt2)
 {
@@ -24,7 +19,7 @@ void Circle::update_pos(const float dt2)
 
   p_prev_.set(p_curr_);
   p_curr_.set(p_next);
-  p_res_.set(p_next);
+  p_temp_.set(p_next);
 }
 
 void Circle::resolve_collision(const Circle& circle)
@@ -35,21 +30,41 @@ void Circle::resolve_collision(const Circle& circle)
   float overlap = dist - Circle::diameter;
   if (overlap < 0) {
     p_diff.scalar_mul(overlap * 0.5 / dist);
-    p_res_.vec_add(p_diff);
+    p_temp_.vec_add(p_diff);
   }
 }
 
 void Circle::update_pos_resolved()
 {
-  p_curr_.set(p_res_);
+  p_curr_.set(p_temp_);
 }
 
-float Circle::x() const
+Vec2 Circle::get_accel() const
 {
-  return p_curr_.x();
+  return Vec2(0, Circle::g);
 }
 
-float Circle::x() const
+Vec2 Circle::get_pos() const
 {
-  return p_curr_.y();
+  return p_curr_;
+}
+
+float Circle::get_x() const
+{
+  return p_curr_.get_x();
+}
+
+float Circle::get_y() const
+{
+  return p_curr_.get_y();
+}
+
+bool Circle::is_eq(const Circle& circle)
+{
+  return p_curr_.is_eq(circle.p_curr_);
+}
+
+void Circle::clamp_p_temp(const Vec2& min, const Vec2& max)
+{
+  p_temp_.clamp(min, max);
 }
