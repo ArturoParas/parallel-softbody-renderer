@@ -62,9 +62,6 @@ int main()
         return -1;
     }
 
-    std::cerr << "hi" << "\n";
-
-
     glEnable(GL_DEPTH_TEST);
 
     //Shaders
@@ -79,6 +76,7 @@ int main()
 
     //Objects
     Object object(&model);
+    Object object2(&model, glm::vec3(3.f, 0.f,0.f));
 
     //Camera
     Camera camera(glm::vec3(0.f,0.f,10.f));
@@ -156,6 +154,7 @@ int main()
         shader.SetVec3Param("lightPos",camera.position);
 
         object.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
+        object2.Draw(shader,glm::vec3(0.8f,0.4f,0.4f));
 
         window.display();
 
