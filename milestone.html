@@ -55,15 +55,15 @@
                         <h3 class="major"><span>Work Completed So Far</span></h3>
                         <h4>Python 2D Verlet Particle Sim</h4>
                         <p>
-                          COPY PASTE
+                          We have implemented a Python simulation for 2D particles, and are well on our way with our parallel implementation in C++. Ordinarily, we would update a particle’s position using the Euler method. This gives the equation for the next position of a particle as xn+1=xn+vndt+andt2, where we compute acceleration by using gravity and finding the particle’s distance to the particles that it is connected to by a spring. However, we elected to use Verlet Integration to update our particle positions. This means that instead of storing current positions and velocities, we actually store current and previous positions. We can then approximate velocities with vn=(xn-xn-1)/dt, so our final position update equation is xn+1=2xn-xn-1+andt2. We use this approach because it essentially handles particles bouncing off of each other and off of walls after collisions for us, rather than having to write a “conservation of momentum” function ourselves. Additionally, Verlet Integration is numerically more stable than the Euler method, meaning particles are much less likely to suddenly explode in all directions with extremely high velocity. Outside of Verlet Integration, we also implemented the function to get the acceleration of particles according to gravity and springs potential, collision detection and resolution, and boundaries. All of this has been implemented sequentially both in C++ and Python, and we have achieved basic particle motion with gravity and border collisions in CUDA. We have stuck with the design discussed in our proposal, which detailed algorithms that function sequentially, but are designed for parallel execution. Thus, we hope having this architecture will make porting the remainder of the simulation much quicker.
                         </p>
                         <h4>C++ Renderer</h4>
                         <p>
-                          COPY PASTE
+                          We have successfully completed implementation of a 3D C++ renderer built using OpenGL. The renderer employs a Phong lighting model to make depth perceivable. It is also capable of drawing objects with positions that vary every frame with a simple object transform, meaning changing an object’s position is as easy as changing a column in its transformation matrix. The renderer also renders partially occluded objects correctly, meaning we will be able to visualize our 3D spring-mass soft bodies correctly.  Moreover, as we intended, implementing the renderer from scratch has given us extremely granular control over when and how particles and springs are drawn. This has greatly facilitated preparations for implementing multi-threaded rendering. Specifically, we have completely decoupled physics computations and rendering such that all particle and spring positions are written to an output buffer that is passed to the renderer when all calculations for the frame are complete. Currently, because our program is running on only one thread, the renderer then uses this output buffer to draw the current frame before the  computations for the next frame begin.
                         </p>
                         <h4>C++ 2D Verlet Particle Sim</h4>
                         <p>
-                          COPY PASTE
+                          We have ported over our Python code to C++ and can render particles. Moreover, we have implemented basic movement and collisions with borders. We are currently working hard to get elastic forces up and running in an efficient manner, and intend to have this finished by December 10.
                         </p>
                       </section>
 
@@ -71,22 +71,23 @@
                         <h3 class="major"><span>How we are Doing With Respect to Our Deliverables</span></h3>
                         <h4>3D Particle Simulation with 10k Particles and 130k Springs</h4>
                         <p>
-                          COPY PASTE
+                          We are confident that we will be able to have a fully functional, stable soft-body simulation that has been sped up using CUDA. Having said this, one of our biggest concerns at the moment is the tradeoff we are facing between performance and memory usage. Thus, we are not sure if our goal of 10k particles with 130k springs is realistic (as discussed in our proposal). We nevertheless intend to push the bounds of what our program is capable of handling at a reasonable frame rate, optimizing as much as possible to handle arbitrarily large inputs. We aim to explore the relationship between a softbody’s size and the program’s performance, and discuss the scalability obstacles in our final report.
                         </p>
                         <h4>Multi-Threaded Renderer</h4>
                         <p>
-                          WRITE / COPY PASTE
+                          Seeing as we have designed our C++ implementation with multi-threaded rendering in mind, we remain confident that it is something that we will be able to implement and that will benefit performance. As discussed above, our current pipeline for a given frame involves performing all of the necessary physics computations for the frame, writing the results to an output buffer, rendering the output buffer, and only then beginning the calculations for the following frame. In other words, currently, computation and rendering are performed entirely in sequential order. This system can be improved by introducing splitting the computation and rendering phases of a given frame into two distinct threads. In doing so, we allow the thread in charge of rendering to draw the results from one frame (using the frame’s output buffer) whilst the thread in charge of performing physics computations begins working on the results for the next frame using a different buffer. This creates concurrency between computation and rendering, and we therefore hypothesize that this will lead to an improvement in performance, as data will have the capacity to be rendered at a higher rate. 
                         </p>
                         <h4>Collisions Between Multiple Soft Bodies</h4>
                         <p>
-                          COPY PASTE
+                          We don’t believe that we’ll achieve this reach goal. We haven’t spent any time thinking about how to approach this problem, and we don’t have much time left to finish our project. Thus, we’ll spend our remaining time on reaching our goals described above, and ensuring everything is ready for our demo on December 13.
                         </p>
 											</section>
 
 											<section>
                         <h3 class="major"><span>Poster Session Demo</span></h3>
                         <p>
-                          COPY PASTE
+                          We originally hoped to show a live demo of our soft body sim running, with a big sphere hitting and bouncing off the ground. Unfortunately, neither of our devices have GPUs in our laptops, so this demo would require ssh-ing into the Gates machines. Because we are rendering the simulation in real time, running the application remotely poses extremely large latency costs, resulting in a feed with extremely low frame rate. Thus, for our demonstration we will have a pre recorded demo of our soft body simulation.
+We’ll also have speedup graphs as we originally planned, with two new iterations to these graphs added in. These will show the speedup between: 1) All algorithms for 2D sequential in Python. 2) All algorithms for 2D sequential in C++. 3) All algorithms for 3D sequential in C++. 4) Parallel particle position updates. 5) Parallel particle collision detection and resolution. 6) Multi-threading the rendering process.
                         </p>
 											</section>
 
@@ -98,7 +99,8 @@
 											<section>
                         <h3 class="major"><span>Biggest Concerns</span></h3>
                         <p>
-                          COPY PASTE
+                          One of our biggest concerns has to do with storing the necessary information for each particle in an efficient way. Some of the considerations we must keep in mind when designing this system include the need for efficient collision detection between particles, distance checks for particles that are connected to each other by springs, and synchronous writes to an output buffer that will be passed to the renderer. In both of our sequential implementations, we have stored particles in an explicit grid. This method yielded extremely quick and convenient access to neighboring particles during collision detection. Having said this, storing the entire grid incurs an extremely large memory footprint, and we often find ourselves looping many times over empty rows and columns. Moreover, we originally intended to store pointers to particles in the grid and simply update the data referenced by these pointers during every frame. However, we realized that references do not translate well into CUDA device code, so we have switched to using object buffers. 
+Another concern of ours is our timeline. Though we have a timeline to successfully implement a functional demo by Friday’s session, it will be quite the crunch. 
                         </p>
 											</section>
 										</article>
