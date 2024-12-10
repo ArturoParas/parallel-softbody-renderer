@@ -15,11 +15,17 @@
 #include <Object.h>
 #include <Model.h>
 
+#include <circle.hpp>
+#include <vec2.hpp>
+#include <solver.hpp>
+
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
 #define MOVE_SPEED 5.f
 #define MOUSE_SENSITIVITY 1.f
+
+#define NUM_PARTICLES 5
 
 //export LD_LIBRARY_PATH=/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/lib:/usr/lib/
 //g++ -c main.cpp -I/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/include
@@ -51,7 +57,7 @@ int main()
     contextsettings.attributeFlags = sf::ContextSettings::Default;
     contextsettings.majorVersion = 4;
     contextsettings.minorVersion = 6;
-    contextsettings.depthBits = 24;
+    contextsettings.depthBits = 0;
     sf::Window window(sf::VideoMode(WINDOW_WIDTH,WINDOW_HEIGHT),"3D OpenGL", sf::Style::Default,contextsettings);
     // sf::Window window(sf::VideoMode(WINDOW_WIDTH,WINDOW_HEIGHT),"3D OpenGL");
     sf::Clock clock;
@@ -71,15 +77,41 @@ int main()
     shader.SetVec3Param("lightColor",glm::vec3(1.f));
 
     //Models
-    // Model model(Model::MODEL_PRIMITIVE_ICOSPHERE2);
     Model model("../tests/particle.fbx");
 
     //Objects
-    Object object(&model);
-    Object object2(&model, glm::vec3(3.f, 0.f,0.f));
+
+    std::vector<Object> objects;
+
+    for(int i = 0; i < NUM_PARTICLES; i++){
+        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(softbody_sim::Circle::rad));
+    }
+
+    //Circles
+
+    std::vector<softbody_sim::Circle> circles;
+    for(int i = 0; i < NUM_PARTICLES; i++){
+
+        softbody_sim::Vec2 p_prev(8.f*i,10.f);
+        softbody_sim::Vec2 p_curr(8.f*i,10.f);
+
+        circles.emplace_back(p_prev, p_curr);
+    }
+
+    //Springs
+
+    //Solver
+
+    softbody_sim::Solver solver(100,100,circles);
+
+    for(auto circle : circles)
+    {
+        solver.insert_circle(circle);
+    }
+
 
     //Camera
-    Camera camera(glm::vec3(0.f,0.f,10.f));
+    Camera camera(glm::vec3(0.f,0.f,100.f));
 
     //Main Loop
 
@@ -89,6 +121,8 @@ int main()
     {
 
         float dt = clock.restart().asSeconds();
+
+
 
         sf::Event event;
         while (window.pollEvent(event))
@@ -146,6 +180,10 @@ int main()
             window.setMouseCursorVisible(true);
         }
 
+
+        solver.update();
+
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.Use();
@@ -153,8 +191,27 @@ int main()
         shader.SetMat4Param("view",camera.GetViewMatrix());
         shader.SetVec3Param("lightPos",camera.position);
 
-        object.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
-        object2.Draw(shader,glm::vec3(0.8f,0.4f,0.4f));
+        
+        for(int i = 0 ; i < NUM_PARTICLES; i++){
+
+            Object obj = objects[i];
+            softbody_sim::Circle circle = circles[i];
+
+            obj.SetPosition(circle.get_x() , 0.f, circle.get_y());
+
+            // std::cerr << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
+
+
+        }
+
+        for(int i = 0 ; i < NUM_PARTICLES; i++){
+
+            Object obj = objects[i];
+
+            std::cerr << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
+
+            obj.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
+        }
 
         window.display();
 

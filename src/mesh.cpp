@@ -38,10 +38,10 @@ Mesh::Mesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices)
     glBindVertexArray(vao);
 
     glBindBuffer(GL_ARRAY_BUFFER,vbo);
-    glBufferData(GL_ARRAY_BUFFER,vertices.size() * sizeof(Vertex),vertices.data(),GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER,vertices.size() * sizeof(Vertex),vertices.data(),GL_DYNAMIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,indices.size() * sizeof(glm::uint32_t),indices.data(),GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,indices.size() * sizeof(glm::uint32_t),indices.data(),GL_DYNAMIC_DRAW);
 
     glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(Vertex),(void*)offsetof(Vertex,pos));
     glEnableVertexAttribArray(0);

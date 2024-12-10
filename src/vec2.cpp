@@ -3,6 +3,7 @@
 
 using namespace softbody_sim;
 
+Vec2::Vec2(const float c) : x_(c), y_(c) {};
 Vec2::Vec2(const float x, const float y) : x_(x), y_(y) {};
 
 void Vec2::set(const Vec2& vec)

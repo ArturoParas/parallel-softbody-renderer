@@ -4,6 +4,9 @@
 
 using namespace softbody_sim;
 
+Circle::Circle()
+  : p_prev_(Vec2(0.f)), p_curr_(Vec2(0.f)), p_temp_(Vec2(0.f)) {};
+
 Circle::Circle(const Vec2& p_prev, const Vec2& p_curr)
   : p_prev_(p_prev), p_curr_(p_curr), p_temp_(p_curr) {};
 

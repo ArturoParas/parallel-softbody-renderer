@@ -7,6 +7,7 @@ namespace softbody_sim
 class Vec2
 {
 public:
+  Vec2(const float c);
   Vec2(const float x, const float y);
 
   void set(const Vec2& vec);

@@ -5,7 +5,7 @@
 using namespace softbody_sim;
 
 Solver::Solver(const int width, const int height, std::vector<Circle>& circle,
-  const int intermediate_steps=8, const float dt=0.1) : width_(width), height_(height),
+  const int intermediate_steps, const float dt) : width_(width), height_(height),
   num_rows_(ceil(height / Circle::diameter) + 2), num_cols_(ceil(width / Circle::diameter) + 2),
   grid_(std::vector<std::vector<std::vector<Circle>>>(
     num_rows_, std::vector<std::vector<Circle>>(num_cols_, std::vector<Circle>(0)))),

@@ -24,6 +24,17 @@ glm::mat4 Object::GetTransformationMatrix(){
 
 }
 
+void Object::SetPosition(float x, float y, float z){
+
+    
+
+    position.x = x;
+    position.y = y;
+    position.z = z;
+
+}
+
+
 void Object::Draw(Shader & shader,glm::vec3 color){
 
 

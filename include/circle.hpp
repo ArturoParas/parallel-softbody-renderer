@@ -9,12 +9,13 @@ namespace softbody_sim
 class Circle
 {
 public:
-  constexpr static float rad = 25;
+  constexpr static float rad = 2.5;
   constexpr static float diameter = rad * 2;
   constexpr static float mass = 1;
   constexpr static float g = 1000;
   // static float v_thresh;
 
+  Circle();
   Circle(const Vec2& p_prev, const Vec2& p_curr);
 
   void update_pos(const float dt2);
