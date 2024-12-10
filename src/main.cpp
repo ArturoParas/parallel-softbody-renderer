@@ -15,6 +15,9 @@
 #include <Object.h>
 #include <Model.h>
 
+#include <chrono>
+#include <thread>
+
 #include <circle.hpp>
 #include <vec2.hpp>
 #include <solver.hpp>
@@ -25,14 +28,14 @@
 #define MOVE_SPEED 5.f
 #define MOUSE_SENSITIVITY 1.f
 
-#define NUM_PARTICLES 5
+#define NUM_PARTICLES 1
 
 //export LD_LIBRARY_PATH=/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/lib:/usr/lib/
 //g++ -c main.cpp -I/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/include
 //g++ main.o mesh.o -o sfml-app -L/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/lib -lsfml-graphics -lsfml-window -lsfml-system -lGL
 
 
-//I will move this method later 
+//I will move this method later
 std::string ReadTextFile(const std::string & filename){
 
     std::ifstream file(filename);
@@ -57,7 +60,7 @@ int main()
     contextsettings.attributeFlags = sf::ContextSettings::Default;
     contextsettings.majorVersion = 4;
     contextsettings.minorVersion = 6;
-    contextsettings.depthBits = 0;
+    contextsettings.depthBits = 24;
     sf::Window window(sf::VideoMode(WINDOW_WIDTH,WINDOW_HEIGHT),"3D OpenGL", sf::Style::Default,contextsettings);
     // sf::Window window(sf::VideoMode(WINDOW_WIDTH,WINDOW_HEIGHT),"3D OpenGL");
     sf::Clock clock;
@@ -92,8 +95,8 @@ int main()
     std::vector<softbody_sim::Circle> circles;
     for(int i = 0; i < NUM_PARTICLES; i++){
 
-        softbody_sim::Vec2 p_prev(8.f*i,10.f);
-        softbody_sim::Vec2 p_curr(8.f*i,10.f);
+        softbody_sim::Vec2 p_prev(5.f*(i+1),10.f);
+        softbody_sim::Vec2 p_curr(5.f*(i+1),10.f);
 
         circles.emplace_back(p_prev, p_curr);
     }
@@ -102,16 +105,15 @@ int main()
 
     //Solver
 
-    softbody_sim::Solver solver(100,100,circles);
+    softbody_sim::Solver solver(10,1000,circles,1,0.1);
 
-    for(auto circle : circles)
+    for(auto& circle : circles)
     {
         solver.insert_circle(circle);
     }
 
-
     //Camera
-    Camera camera(glm::vec3(0.f,0.f,100.f));
+    Camera camera(glm::vec3(0.f,0.f,80.f));
 
     //Main Loop
 
@@ -121,7 +123,6 @@ int main()
     {
 
         float dt = clock.restart().asSeconds();
-
 
 
         sf::Event event;
@@ -157,7 +158,7 @@ int main()
         if(sf::Mouse::isButtonPressed(sf::Mouse::Right))
         {
             if(isFirstMouse)
-            {   
+            {
                 lastMousePos = sf::Mouse::getPosition(window);
                 isFirstMouse = false;
                 window.setMouseCursorVisible(false);
@@ -182,6 +183,8 @@ int main()
 
 
         solver.update();
+        std::cout << "post update" << std::endl;
+        solver.print_grid();
 
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -191,16 +194,22 @@ int main()
         shader.SetMat4Param("view",camera.GetViewMatrix());
         shader.SetVec3Param("lightPos",camera.position);
 
-        
         for(int i = 0 ; i < NUM_PARTICLES; i++){
 
-            Object obj = objects[i];
-            softbody_sim::Circle circle = circles[i];
+            Object& obj = objects[i];
+            softbody_sim::Circle& circle = circles[i];
+
+            std::cout << "circle pos: " << std::endl;
+            std::cout << "(" << circle.get_x() << ", " << circle.get_y() << ")" << std::endl;
 
             obj.SetPosition(circle.get_x() , 0.f, circle.get_y());
 
-            // std::cerr << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
+            std::cout << "update pos:" << std::endl;
+            std::cout << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
 
+            obj = objects[i];
+            std::cout << "2nd update pos" << std::endl;
+            std::cout << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
 
         }
 
@@ -208,12 +217,15 @@ int main()
 
             Object obj = objects[i];
 
-            std::cerr << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
+            std::cout << "draw pos:" << std::endl;
+            std::cout << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
 
             obj.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
         }
 
         window.display();
+        std::this_thread::sleep_for(std::chrono::milliseconds((int)(solver.get_dt() * 1000)));
+        // std::this_thread::sleep_for(std::chrono::milliseconds((int)(1)));
 
     }
 

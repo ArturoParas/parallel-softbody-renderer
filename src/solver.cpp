@@ -1,3 +1,4 @@
+#include <iostream>
 #include <cmath>
 
 #include "../include/solver.hpp"
@@ -16,8 +17,8 @@ Solver::Solver(const int width, const int height, std::vector<Circle>& circle,
 
 void Solver::insert_circle(Circle& circle)
 {
-  int row = int(circle.get_x() / Circle::diameter) + 1;
-  int col = int(circle.get_y() / Circle::diameter) + 1;
+  int col = int(circle.get_x() / Circle::diameter) + 1;
+  int row = int(circle.get_y() / Circle::diameter) + 1;
   next_grid_[row][col].push_back(circle);
 }
 
@@ -112,7 +113,7 @@ void Solver::transition_circles()
     for (auto& cell : row) {
       int num_circles = cell.size();
       for (int i = 0; i < num_circles; i++) {
-        Circle circle = cell.back();
+        Circle& circle = cell.back();
         cell.pop_back();
         circle.update_pos_resolved();
         insert_circle(circle);
@@ -130,4 +131,40 @@ void Solver::update()
     transition_circles();
     transition_grid();
   }
+  print_grid();
+}
+
+void Solver::print_grid()
+{
+  std::cout << "Circle positions:" << std::endl;
+  for (auto& row : grid_) {
+    for (auto& cell : row) {
+      for (auto& circle : cell) {
+        std::cout << "Curr: ";
+        std::cout << "(" << circle.get_pos().get_x() << ", " << circle.get_pos().get_y() << ")" << std::endl;
+        std::cout << "Temp: ";
+        std::cout << "(" << circle.get_temp_pos().get_x() << ", " << circle.get_temp_pos().get_y() << ")" << std::endl;
+      }
+    }
+  }
+}
+
+void Solver::print_next_grid()
+{
+  std::cout << "Circle positions:" << std::endl;
+  for (auto& row : next_grid_) {
+    for (auto& cell : row) {
+      for (auto& circle : cell) {
+        std::cout << "Curr: ";
+        std::cout << "(" << circle.get_x() << ", " << circle.get_y() << ")" << std::endl;
+        std::cout << "Temp: ";
+        std::cout << "(" << circle.get_temp_pos().get_x() << ", " << circle.get_temp_pos().get_y() << ")" << std::endl;
+      }
+    }
+  }
+}
+
+float Solver::get_dt() const
+{
+  return dt_;
 }

@@ -30,6 +30,12 @@ public:
 
   void update();
 
+  void print_grid();
+
+  void print_next_grid();
+
+  float get_dt() const;
+
 private:
   int width_;
   int height_;

@@ -52,6 +52,11 @@ Vec2 Circle::get_pos() const
   return p_curr_;
 }
 
+Vec2 Circle::get_temp_pos() const
+{
+  return p_temp_;
+}
+
 float Circle::get_x() const
 {
   return p_curr_.get_x();

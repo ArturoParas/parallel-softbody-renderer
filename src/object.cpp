@@ -26,19 +26,21 @@ glm::mat4 Object::GetTransformationMatrix(){
 
 void Object::SetPosition(float x, float y, float z){
 
-    
+    // std::cout << "before:" << std::endl;
+    // std::cout << position.x << " " << position.y << " " << position.z << " " << std::endl;   
 
     position.x = x;
     position.y = y;
     position.z = z;
 
+    // std::cout << "after:" << std::endl;
+    // std::cout << position.x << " " << position.y << " " << position.z << " \n" << std::endl;   
 }
 
 
 void Object::Draw(Shader & shader,glm::vec3 color){
 
-
-
+    /** TODO: Is it possible to draw them without putting them into a matrix to save space? */
     shader.SetMat4Param("model",GetTransformationMatrix());
     shader.SetVec3Param("color",color);
     model->Draw(shader,GetTransformationMatrix());
