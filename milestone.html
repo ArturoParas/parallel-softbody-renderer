@@ -1,0 +1,392 @@
+<!DOCTYPE HTML>
+<!--
+	TXT by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+	<head>
+		<title>TXT by HTML5 UP</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+	</head>
+	<body class="homepage is-preload">
+		<div id="page-wrapper">
+
+			<!-- Header -->
+				<header id="header">
+					<div class="logo container">
+						<div>
+							<h1>TensileFlow</h1>
+							<p>A Parallel 3D Soft Body Renderer</p>
+						</div>
+					</div>
+				</header>
+
+			<!-- Nav -->
+				<nav id="nav">
+					<ul>
+						<li><a href="index.html">Project Proposal</a></li>
+            <li class="current"></li><a href="milestone.html">Milestone Report</a></li>
+					</ul>
+				</nav>
+
+			<!-- Main -->
+				<section id="main">
+					<div class="container">
+						<div class="row">
+							<div class="col-12">
+								<div class="content">
+
+									<!-- Content -->
+
+										<article class="box page-content">
+
+											<header>
+												<!-- <h3>Parallel Computer Architecture Project Proposal</h3> -->
+												<p>Arturo Paras and Henrique Foureaux Lee</p>
+												<ul class="meta">
+													<li class="icon fa-clock">Fall 2024</li>
+												</ul>
+											</header>
+
+                      <section>
+                        <h3 class="major"><span>Summary</span></h3>
+                        <p>
+                          We aim to implement a parallel 3D soft body simulator on the NVIDIA GPUs
+                          in the lab. Our approach to soft bodies will be to create a parallel
+                          particle simulation program with “springs” between nearby particles,
+                          which will ensure they stay close together, but allows for some give due
+                          to the springs’ elastic forces. We have two potential reach goals: one is
+                          to incorporate multithreading into the rendering process, so we can
+                          interleave the process of rendering a frame with performing calculations
+                          of subsequent frames, and the other is to render multiple soft bodies and
+                          see how we can simulate interactions between them.
+                        </p>
+                      </section>
+
+											<section>
+                        <h3 class="major"><span>Background</span></h3>
+												<p>
+                          We can divide our project into the following processes that can be
+                          parallelized:
+												</p>
+                        <h4>Particle Position / Spring Updates</h4>
+                        <p>
+                          Across each frame, particles are undergoing identical calculations to
+                          update their positions based on the forces applied to them. Additionally,
+                          as seen in many soft body models [3], [4], particles can conduct these
+                          updates completely independently of each other. Thus, this algorithm
+                          lends itself extremely well to vectorization, as updating the position of
+                          each particle represents completely identical and independent work that
+                          can be done. Since springs are really just an abstract way to represent
+                          forces between particles based on their distances, updating springs is
+                          not a real step, but a consequence of updating particle positions.
+                        </p>
+                        <h4>Particle Collision Detection and Separation</h4>
+                        <p>
+                          After we update the positions of particles based on the forces applied to
+                          them, particles need to detect if they overlap, and if they do, they need
+                          to be separated. A naive approach would be to iterate through each
+                          particle, and find the distance between the particle and every other
+                          particle in the simulation. If this distance is less than the diameter of
+                          one particle (we’ll say all particles have the same radius), then we know
+                          they overlap. To separate them, we would move them in opposite
+                          directions, each by half of the amount they overlap by, which would leave
+                          them exactly touching. One thing to note is that during a pass of
+                          particle collision detection and separation, we can’t guarantee that we
+                          don’t create new collisions as a result. Thus, we must run multiple
+                          iterations of this algorithm to ensure no collisions.
+                        </p>
+                        <p>
+                          To reduce the work of this algorithm, we can first trim the number of
+                          particles each particle has to check for collisions between. We can do
+                          this by discretizing our space into a voxel grid, where each voxel has a
+                          side length equal to the diameter of a particle. Inside of these voxels,
+                          we can store pointers to particles whose centers lie inside the voxel.
+                          Now, each particle only needs to check for collisions within the 3x3x3
+                          region of voxels centered around the voxel that the particle is in.
+                        </p>
+                        <p>
+                          Now to parallelize this approach, we can note that on each pass of the
+                          algorithm, all particles can detect their collisions and calculate their
+                          updated positions at the same time, and only write those updates once all
+                          particles have finished their computation. This means we can run vector
+                          operations across voxels! Thus, this algorithm is extremely
+                          parallelizable, as our space will be divided into thousands upon
+                          thousands of voxels, which can each do completely independent work.
+                        </p>
+                        <h4>3D Multi-Threaded Renderer</h4>
+                        <p>
+                          In older technologies, a renderer will wait until all of a timestep’s
+                          calculations have completed before beginning the process of drawing the
+                          resulting frame to the screen. The implementation of such pipelines
+                          forces calculations and rendering to be performed in sequence, which can
+                          create non-negligible idle time for the GPU while it waits for a frame’s
+                          calculations to complete, or conversely idle time for the CPU while it
+                          waits for the drawing process to complete. As a result, modern
+                          technologies can employ what is known as multi-threaded rendering. This
+                          approach interleaves the drawing of frames with calculations for
+                          subsequent frames in order to minimize the idle time of either component.
+                          However, it also adds substantial complexity to the rendering process,
+                          and requires custom integration between calculation and rendering phases
+                          in order to maximize the efficiency of data passing and prevention of
+                          data races.
+                        </p>
+											</section>
+
+											<section>
+                        <h3 class="major"><span>The Challenge</span></h3>
+                        <p>
+                          There are two main parts to this project – parallelizing the particle
+                          position update step, and parallelizing the particle collision detection
+                          and separation step. Additionally, our reach goal of interleaving the
+                          process of rendering the current frame with computing the next frame
+                          presents an optional third part. These three steps present unique
+                          challenges to parallelization, detailed below.
+                        </p>
+												<h4>Particle Position Update</h4>
+												<p>
+                          We have identified multiple implementations of the spring-mass model
+                          wherein the process of updating particle positions are independent of
+                          each other within a frame. Thus, seeing as the calculations to update
+                          each particle’s position are identical, we can leverage vectorized
+                          calculations performed within CUDA blocks to parallelize particle
+                          position updates as much as possible. The challenge comes in partitioning
+                          the set of particles across CUDA blocks, particularly since particles
+                          need to read the positions of  the particles that they are connected to
+                          in order to calculate the elastic forces that are exerted upon them.
+                          There is one key assumption that holds throughout the simulation that
+                          makes this calculation substantially easier: a particle’s connectivity is
+                          fixed. Thus, on the simulation’s startup, before any calculations are
+                          performed, we may precompute a partition of the particles based on their
+                          connectivity that adequately balances load. We can then use this
+                          partition throughout the simulation, assigning chunks of the partition to
+                          CUDA blocks to ensure load balancing, as well as optimal use of shared
+                          memory.
+												</p>
+                        <h4>Particle Collision Detection and Separation</h4>
+                        <p>
+                          We want to execute the parallelism here in CUDA, due to the high
+                          resolution grid we will partition our space into, and the fact that we
+                          can vectorize the computation across cells in the grid. The challenge in
+                          doing this comes in the way in which we partition the voxel grid across
+                          GPU blocks to minimize accesses to global memory whilst preserving
+                          correctness. Noting that each voxel requires a neighborhood of 3x3x3
+                          centered around itself to perform collision resolution, we aim to assign
+                          CUDA blocks work at a per-neighborhood granularity, placing all of the
+                          relevant information pertaining to the neighborhood into the block’s
+                          shared memory before starting collision resolution. Though this approach
+                          works very well within the neighborhood, it is entirely possible for a
+                          particle to get pushed into an adjacent voxel during collision
+                          resolution, in which case global memory accesses would be needed to
+                          communicate this transfer for subsequent collision resolution iterations.
+                          We plan on experimenting with ways of optimizing this transfer, including
+                          creating input/output buffers to store such transfers between collision
+                          resolution iterations or perhaps propagating these updates after multiple
+                          rounds of collision resolution, and ignoring them for all other
+                          iterations.
+                        </p>
+                        <h4>3D Multi-Threaded Renderer</h4>
+                        <p>
+                          We will begin by having a fence between the calculation and rendering
+                          steps of the simulation. That is, initially, all calculations for a given
+                          frame will be completed before the renderer begins drawing the particles
+                          in their respective positions. Though this implementation is simple, it
+                          will likely not scale well, as the total time to render a frame will be
+                          fixed at the sum of calculation time for the frame and draw time for the
+                          frame. Seeing as we aim to render thousands of particles at a smooth
+                          frame rate, we must interleave these steps in order to ensure the maximum
+                          utilization of our resources. In other words, while a given frame is
+                          being drawn, we will allow available resources to begin calculations for
+                          the next frame, effectively decoupling the calculation and drawing
+                          phases. This is known as multi-threaded rendering, and there are a few
+                          considerations to keep in mind when implementing such a system. Namely,
+                          we must ensure that the particle positions for each frame are stored in
+                          memory only until the frame has finished rendering. Otherwise, the memory
+                          footprint of storing frame information would become too great, and could
+                          possibly cause crashes or overflows. We must implement a flagging process
+                          to ensure that frame data is not read by the renderer while calculations
+                          are still being performed. Lastly, we will have to experiment with
+                          methods of efficiently communicating frame data to the process that is in
+                          charge of the renderer, as if not dealt with properly, the communication
+                          overhead of passing frame data between processes can become a substantial
+                          bottleneck.
+                        </p>
+											</section>
+
+											<section>
+                        <h3 class="major"><span>Goals and Deliverables</span></h3>
+												<h4>Main Deliverable</h4>
+												<p>
+                          The main deliverable we plan on producing is a 3D spring particle sim for
+                          rendering soft bodies. We hope to be able to run the sim and render the
+                          results in real time. This means we hope to run the whole sim / render
+                          pipeline at a rate of at least 30 Hz. As for particle count and spring
+                          count, we’re hoping to render at least 10k particles in real time, as the
+                          research we’ve done indicates that 10k particles seems to be a common
+                          benchmark for stress testing. We also plan on rendering 26 springs per
+                          particle, leaving us with an estimate of about 130k springs (each spring
+                          connects two particles, so 260k springs would be double counting each
+                          spring). We’re not sure how this large number of springs will affect
+                          performance, so our particle count goals are open to change.
+                          Additionally, we plan on analyzing the effects on performance of particle
+                          count, number of springs per particle, and particle size.
+												</p>
+                        <h4>Reach Deliverables</h4>
+                        <p>
+                          If time permits, we hope to extend our project by incorporating
+                          multithreading into the rendering process. We also hope to implement a
+                          way to allow for collisions of soft bodies. The current issue with our
+                          algorithms is that if two soft bodies collide, then the particles could
+                          interleave. This is not the behavior we want, as we want soft bodies to
+                          remain independent structures. However, we’re currently unsure how to
+                          approach this extension, thus it is a reach deliverable.
+                        </p>
+                        <h4>Poster Board Session Demo</h4>
+                        <p>
+                          Our demonstration at the poster session will be a live spring particle
+                          simulation and rendering. The main demo we want to show is of dropping a
+                          soft sphere onto various rigid shapes and seeing how it falls and how it
+                          squishes / bounces as it collides.
+                        </p>
+                        <p>
+                          Additionally, we will provide graphs on how sensitive our performance is
+                          to the number of particles, number of springs per particle, and the size
+                          of particles. Finally, we will provide speedup graphs across different
+                          iterations of our project, which will be developed as follows: 1) All
+                          algorithms sequential. 2) Parallel particle position updates. 3) Parallel
+                          particle collision detection and separation. 4) (Reach) multithreading
+                          the rendering process.
+                        </p>
+                        <p>
+                          We will provide one additional demo of two soft body spheres colliding
+                          with each other if we manage to get collision between soft bodies
+                          working.
+                        </p>
+											</section>
+
+											<section>
+                        <h3 class="major"><span>Platform Choice</span></h3>
+												<h4>Renderer</h4>
+												<p>
+                          We will use OpenGL, as it is a C++ graphics library that has the
+                          capability to render 3D shapes using GPU draw calls, and it has extensive
+                          documentation. Additionally, it gives us very fine grained control of
+                          when things are drawn, giving us the chance to pursue multi-threaded
+                          rendering if time permits.
+												</p>
+                        <h4>Spring Particle Sim</h4>
+                        <p>
+                          Since our algorithms lend themselves extremely well to vectorized
+                          instructions, we plan on writing our code in CUDA. Thus, we will use the
+                          gates machines we used for lab 2 to take advantage of their GPUs.
+                        </p>
+											</section>
+
+											<section>
+                        <h3 class="major"><span>Schedule</span></h3>
+												<p>
+                          Nov 17 - Have independent particle motion and collision working and
+                          rendered. <br>
+                          Nov 24 - Have spring mass system working; plan for parallelizing should
+                          be in place and parallelization implementation should be started. <br>
+                          Dec 1 - Parallelization of simulation pipeline should be approaching
+                          completion. <br>
+                          Dec 8 - Parallelization should be completed, only polishing should
+                          remain. <br>
+                          Dec 15 - Final Deadline, both simulation and report should be finalized.
+                          <br>
+												</p>
+											</section>
+
+											<section>
+                        <h3 class="major"><span>Resources</span></h3>
+												<p>
+                          We plan on using the gates machines we used for lab 2, as they have the
+                          GPUs we need for our project. We also plan on programming our spring
+                          particle sim in CUDA to be able to take full advantage of these GPUs. We
+                          plan on using OpenGL to render our particle sim, but other than that we
+                          will write everything from scratch.
+												</p>
+                        <p>
+                          We do have some papers which we used as a reference to come up with our
+                          proposal, and we will continue to use as references as we develop our
+                          project:
+                        </p>
+                        <p>
+                          [1] A. Moussa, “Spring Physics, Particles and Meshes,” Gorilla Sun, <a href="https://www.gorillasun.de/blog/spring-physics-and-connecting-particles-with-springs/" target="_blank" rel="noopener noreferrer">https://www.gorillasun.de/blog/spring-physics-and-connecting-particles-with-springs/</a> (accessed Nov. 13, 2024). <br>
+                          [2] B. Kenwright, R. Davison, and G. Morgan, Real-Time Deformable Soft-Body Simulation using ..., <a href="https://research.ncl.ac.uk/game/research/publications/Real-Time%20Deformable%20Soft-Body%20Simulation.pdf" target="_blank" rel="noopener noreferrer">https://research.ncl.ac.uk/game/research/publications/Real-Time%20Deformable%20Soft-Body%20Simulation.pdf</a> (accessed Nov. 14, 2024). <br>
+                          [3] J. Salvi, Soft bodies simulation, <a href="https://www.pdf.inf.usi.ch/papers/bachelor_projects/jacob_salvi.pdf" target="_blank" rel="noopener noreferrer">https://www.pdf.inf.usi.ch/papers/bachelor_projects/jacob_salvi.pdf</a> (accessed Nov. 14, 2024). <br>
+                          [4] N. Lisitsa, “Making a 2D soft-body physics engine,” lisyarus blog, <a href="https://lisyarus.github.io/blog/posts/soft-body-physics.html" target="_blank" rel="noopener noreferrer">https://lisyarus.github.io/blog/posts/soft-body-physics.html</a> (accessed Nov. 13, 2024). <br>
+                        </p>
+											</section>
+
+										</article>
+
+								</div>
+							</div>
+						</div>
+					</div>
+				</section>
+
+			<!-- Footer -->
+				<footer id="footer">
+					<div class="container">
+						<!-- <div class="row gtr-200">
+							<div class="col-12"> -->
+
+								<!-- About -->
+									<!-- <section>
+										<h2 class="major"><span>What's this about?</span></h2>
+										<p>
+											This is <strong>TXT</strong>, yet another free responsive site template designed by
+											<a href="http://twitter.com/ajlkn">AJ</a> for <a href="http://html5up.net">HTML5 UP</a>. It's released under the
+											<a href="http://html5up.net/license/">Creative Commons Attribution</a> license so feel free to use it for
+											whatever you're working on (personal or commercial), just be sure to give us credit for the design.
+											That's basically it :)
+										</p>
+									</section> -->
+
+							<!-- </div> -->
+							<!-- <div class="col-12"> -->
+
+								<!-- Contact -->
+									<!-- <section>
+										<h2 class="major"><span>Get in touch</span></h2>
+										<ul class="contact">
+											<li><a class="icon brands fa-facebook-f" href="#"><span class="label">Facebook</span></a></li>
+											<li><a class="icon brands fa-twitter" href="#"><span class="label">Twitter</span></a></li>
+											<li><a class="icon brands fa-instagram" href="#"><span class="label">Instagram</span></a></li>
+											<li><a class="icon brands fa-dribbble" href="#"><span class="label">Dribbble</span></a></li>
+											<li><a class="icon brands fa-linkedin-in" href="#"><span class="label">LinkedIn</span></a></li>
+										</ul>
+									</section> -->
+
+							<!-- </div> -->
+						<!-- </div> -->
+
+						<!-- Copyright -->
+							<div id="copyright">
+								<ul class="menu">
+									<li>Design: <a href="http://html5up.net">HTML5 UP</a></li>
+								</ul>
+							</div>
+
+					</div>
+				</footer>
+
+		</div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/jquery.dropotron.min.js"></script>
+			<script src="assets/js/jquery.scrolly.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+	</body>
+</html>
