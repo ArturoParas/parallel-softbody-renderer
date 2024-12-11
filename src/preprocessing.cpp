@@ -1,6 +1,9 @@
 #include <vector>
 #include <unordered_map>
 #include <iostream>
+#include <string>
+#include <fstream>
+#include <iterator>
 
 #include "../include/preprocessing.hpp"
 
@@ -78,30 +81,48 @@ void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& 
   std::cout << "num springs / circle = " << (float)springs.size() / (float)pts.size() << std::endl;
 }
 
+void write_to_file(
+  const std::vector<Pt3>& pts, const std::vector<Spring>& springs, const std::string file)
+{
+  std::ofstream of("../inputs/" + file);
+  of << pts.size() << "\n";
+  for (const auto& pt : pts) {
+    of << pt.x << " " << pt.y << " " << pt.z << "\n";
+  }
+  of << springs.size() << "\n";
+  for (const auto& spring : springs) {
+    of << spring.idx1 << " " << spring.idx2 << "\n";
+  }
+}
+
 int main(int argc, char* argv[])
 {
-  if (argc > 6) {
+  if (argc > 7) {
     std::cerr << "Too many arguments" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
+  std::string file = "sphere.txt";
   int rad = 53;
   int rest_len = 4;
   Pt3 center(0, 0, 0);
 
   if (argc > 1) {
-    char* end;
-    rad = strtol(argv[1], &end, 10);
+    file = argv[1];
   }
   if (argc > 2) {
     char* end;
-    rest_len = strtol(argv[2], &end, 10);
+    rad = strtol(argv[2], &end, 10);
   }
-  if (argc == 5) {
+  if (argc > 3) {
     char* end;
-    center.x = strtol(argv[3], &end, 10);
-    center.y = strtol(argv[4], &end, 10);
-    center.z = strtol(argv[5], &end, 10);
+    rest_len = strtol(argv[3], &end, 10);
+  }
+  if (argc == 6) {
+    char* end;
+    center.x = strtol(argv[4], &end, 10);
+    center.y = strtol(argv[5], &end, 10);
+    center.z = strtol(argv[6], &end, 10);
   }
 
   std::vector<Pt3> pts;
@@ -110,5 +131,6 @@ int main(int argc, char* argv[])
   get_sphere_pts(rad, center, rest_len, pts, pt_to_idx);
   get_springs(rest_len, pt_to_idx, springs);
   print_sphere_stats(pts, springs);
+  write_to_file(pts, springs, file);
   return 0;
 }

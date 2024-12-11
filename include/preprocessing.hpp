@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <string>
 
 struct Pt3
 {
@@ -35,5 +36,8 @@ void get_springs(
   std::vector<Spring>& springs);
 
 void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& springs);
+
+void write_to_file(
+  const std::vector<Pt3>& pts, const std::vector<Spring>& springs, const std::string file);
 
 #endif // PREPROCESSING_HPP
