@@ -1,6 +1,6 @@
 
-output: main.o mesh.o shader.o camera.o object.o model.o vec2.o circle.o solver.o
-	g++ main.o mesh.o shader.o camera.o object.o model.o vec2.o circle.o solver.o -o sfml-app -g -L$(shell pwd)/../lib -lsfml-graphics -lsfml-window -lsfml-system -lGL -lGLEW -lglm -lassimp
+output: main.o mesh.o shader.o camera.o object.o model.o vec2.o circle.o solver.o cuda_solver.o
+	g++ main.o mesh.o shader.o camera.o object.o model.o vec2.o circle.o solver.o cuda_solver.o -o sfml-app -g -L$(shell pwd)/../lib -L/usr/local/cuda-11.7/lib64/ -lsfml-graphics -lsfml-window -lsfml-system -lGL -lGLEW -lglm -lassimp -lcudart
 
 main.o: main.cpp
 	g++ -c main.cpp -I$(shell pwd)/../include
@@ -29,6 +29,8 @@ circle.o: circle.cpp
 vec2.o: vec2.cpp
 	g++ -c vec2.cpp -I$(shell pwd)/../include
 
+cuda_solver.o : cuda_solver.cu
+	nvcc -c cuda_solver.cu -I$(shell pwd)/../include -O3 -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc
 
 clean:
 	rm *.o sfml-app

@@ -15,6 +15,7 @@
 #include <Object.h>
 #include <Model.h>
 
+
 #include <chrono>
 #include <thread>
 
@@ -26,14 +27,23 @@
 #define WINDOW_HEIGHT 800
 
 #define MOVE_SPEED 5.f
-#define MOUSE_SENSITIVITY 1.f
+#define MOUSE_SENSITIVITY 4.f
 
-#define NUM_PARTICLES 1
+#define NUM_CIRCLES 2
+#define CIRCLE_ENTRY_SIZE 6
 
-//export LD_LIBRARY_PATH=/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/lib:/usr/lib/
-//g++ -c main.cpp -I/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/include
-//g++ main.o mesh.o -o sfml-app -L/afs/andrew.cmu.edu/usr10/hflee/private/15418/TensileFlow/minimalrenderer/lib -lsfml-graphics -lsfml-window -lsfml-system -lGL
+#define NUM_SPRINGS 1
+#define SPRING_ENTRY_SIZE 3
 
+#define DT 0.1
+
+//H: this is a command I have to do when loading up the bash env. Note there are additional components besides those in the one we previously discussed
+// export LD_LIBRARY_PATH=$PWD/../lib:/usr/lib;export PATH=/usr/local/cuda-11.7/bin:${PATH};export LD_LIBRARY_PATH=/usr/local/cuda-11.7/lib64/:${LD_LIBRARY_PATH};source ~/.bashrc
+
+
+void solver_update(const softbody_sim::SolverInfo & solver_info, void* circles, void* springs);
+// void initialize_springs(const softbody_sim::SolverInfo & solver_info, uint16_t *springs_host, uint16_t *springs_device);
+// void host_test_spring_buffer(uint16_t *springs_device);
 
 //I will move this method later
 std::string ReadTextFile(const std::string & filename){
@@ -86,34 +96,40 @@ int main()
 
     std::vector<Object> objects;
 
-    for(int i = 0; i < NUM_PARTICLES; i++){
-        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(softbody_sim::Circle::rad));
+    for(int i = 0; i < NUM_CIRCLES; i++){
+        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(2.5f));
     }
 
+    //Solver
+    softbody_sim::SolverInfo solver(100,100,NUM_CIRCLES,NUM_SPRINGS,2.5f,2.f,1,DT);
+    
     //Circles
+    float* circles = (float*)malloc(sizeof(float) * NUM_CIRCLES * CIRCLE_ENTRY_SIZE);
 
-    std::vector<softbody_sim::Circle> circles;
-    for(int i = 0; i < NUM_PARTICLES; i++){
+    for(int i = 0; i < NUM_CIRCLES; i++){
 
-        softbody_sim::Vec2 p_prev(5.f*(i+1),10.f);
-        softbody_sim::Vec2 p_curr(5.f*(i+1),10.f);
-
-        circles.emplace_back(p_prev, p_curr);
+        circles[CIRCLE_ENTRY_SIZE*i+0] = (i+1) * 16.f;
+        circles[CIRCLE_ENTRY_SIZE*i+1] = 10.f;
+        circles[CIRCLE_ENTRY_SIZE*i+2] = (i+1) * 16.f;
+        circles[CIRCLE_ENTRY_SIZE*i+3] = 10.f;
+        circles[CIRCLE_ENTRY_SIZE*i+4] = (i+1) * 16.f;
+        circles[CIRCLE_ENTRY_SIZE*i+5] = 10.f;
     }
+
+
+    
 
     //Springs
 
-    //Solver
+    uint16_t* springs = (uint16_t*)malloc(sizeof(uint16_t) * NUM_SPRINGS * SPRING_ENTRY_SIZE);
 
-    softbody_sim::Solver solver(10,1000,circles,1,0.1);
-
-    for(auto& circle : circles)
-    {
-        solver.insert_circle(circle);
-    }
+    //for now
+    springs[CIRCLE_ENTRY_SIZE*0+0] = 0; //endpoint A
+    springs[CIRCLE_ENTRY_SIZE*0+1] = 1; //endpoint B
+    springs[CIRCLE_ENTRY_SIZE*0+2] = 12; //Resting Length
 
     //Camera
-    Camera camera(glm::vec3(0.f,0.f,80.f));
+    Camera camera(glm::vec3(10.f,0.f,70.f));
 
     //Main Loop
 
@@ -181,10 +197,9 @@ int main()
             window.setMouseCursorVisible(true);
         }
 
+        
 
-        solver.update();
-        std::cout << "post update" << std::endl;
-        solver.print_grid();
+        solver_update(solver, (void*)circles, (void*)springs);
 
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -194,43 +209,28 @@ int main()
         shader.SetMat4Param("view",camera.GetViewMatrix());
         shader.SetVec3Param("lightPos",camera.position);
 
-        for(int i = 0 ; i < NUM_PARTICLES; i++){
-
-            Object& obj = objects[i];
-            softbody_sim::Circle& circle = circles[i];
-
-            std::cout << "circle pos: " << std::endl;
-            std::cout << "(" << circle.get_x() << ", " << circle.get_y() << ")" << std::endl;
-
-            obj.SetPosition(circle.get_x() , 0.f, circle.get_y());
-
-            std::cout << "update pos:" << std::endl;
-            std::cout << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
-
-            obj = objects[i];
-            std::cout << "2nd update pos" << std::endl;
-            std::cout << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
-
-        }
-
-        for(int i = 0 ; i < NUM_PARTICLES; i++){
+        
+        for(int i = 0 ; i < NUM_CIRCLES; i++){
 
             Object obj = objects[i];
+            obj.position.x = circles[CIRCLE_ENTRY_SIZE*i + 2];
+            obj.position.z = circles[CIRCLE_ENTRY_SIZE*i + 3];
 
-            std::cout << "draw pos:" << std::endl;
-            std::cout << obj.position.x << "  " << obj.position.y << "  " << obj.position.z <<"\n";
+            
+            // std::cout << i << ": "<<   obj.position.x<<" "<<  obj.position.z<< std::endl;
 
             obj.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
         }
 
         window.display();
-        std::this_thread::sleep_for(std::chrono::milliseconds((int)(solver.get_dt() * 1000)));
-        // std::this_thread::sleep_for(std::chrono::milliseconds((int)(1)));
+        std::this_thread::sleep_for(std::chrono::milliseconds((int)(50)));
 
     }
 
+    free(circles);
+    // freeSprings(springs);
+
     return 0;
 }
-
 
 
