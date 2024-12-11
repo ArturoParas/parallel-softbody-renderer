@@ -37,10 +37,6 @@
 
 #define DT 0.1
 
-//H: this is a command I have to do when loading up the bash env. Note there are additional components besides those in the one we previously discussed
-// export LD_LIBRARY_PATH=$PWD/../lib:/usr/lib;export PATH=/usr/local/cuda-11.7/bin:${PATH};export LD_LIBRARY_PATH=/usr/local/cuda-11.7/lib64/:${LD_LIBRARY_PATH};source ~/.bashrc
-
-
 void solver_update(const softbody_sim::SolverInfo & solver_info, void* circles, void* springs);
 // void initialize_springs(const softbody_sim::SolverInfo & solver_info, uint16_t *springs_host, uint16_t *springs_device);
 // void host_test_spring_buffer(uint16_t *springs_device);
@@ -84,7 +80,8 @@ int main()
     glEnable(GL_DEPTH_TEST);
 
     //Shaders
-    Shader shader(ReadTextFile("Shaders/vertex.glsl"),ReadTextFile("Shaders/fragment.glsl"));
+    /** TODO: Why is Shaders dir in src? */
+    Shader shader(ReadTextFile("../src/Shaders/vertex.glsl"),ReadTextFile("../src/Shaders/fragment.glsl"));
     shader.Use();
     shader.SetFloatParam("ambientStrength",0.5f);
     shader.SetVec3Param("lightColor",glm::vec3(1.f));

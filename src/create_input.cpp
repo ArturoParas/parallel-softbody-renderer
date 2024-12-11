@@ -5,7 +5,7 @@
 #include <fstream>
 #include <iterator>
 
-#include "../include/preprocessing.hpp"
+#include "../include/create_input.hpp"
 
 Pt3::Pt3(const float x_, const float y_, const float z_) : x(x_), y(y_), z(z_) {};
 

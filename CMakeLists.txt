@@ -10,7 +10,6 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra)
 endif()
 
-include_directories(./include)
 find_library(ASSIMP_LIB assimp)
 find_library(GLEW_LIB GLEW)
 find_library(GL_LIB GL)
@@ -21,30 +20,38 @@ find_library(SFML_WINDOW_LIB sfml-window)
 find_library(CUDART_LIB cudart)
 
 add_library(
-  renderer STATIC
-  src/camera.cpp
-  src/mesh.cpp
-  src/model.cpp
-  src/object.cpp
-  src/shader.cpp
-)
-add_library(
   softbody_sim STATIC
   src/cuda_solver.cu
   src/exclusiveScan.cu_inl
 )
+add_library(
+  renderer STATIC
+  src/mesh.cpp
+  src/shader.cpp
+  src/camera.cpp
+  src/object.cpp
+  src/model.cpp
+)
+
+target_include_directories(renderer PUBLIC ./include)
+target_include_directories(softbody_sim PUBLIC ./include)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(
   ${PROJECT_NAME}
-  renderer
   softbody_sim
-  ${ASSIMP_LIB}
-  ${GLEW_LIB}
-  ${GL_LIB}
-  ${GLM_LIB}
+  renderer
   ${SFML_GRAPHICS_LIB}
-  ${SFML_SYSTEM_LIB}
   ${SFML_WINDOW_LIB}
+  ${SFML_SYSTEM_LIB}
+  ${GL_LIB}
+  ${GLEW_LIB}
+  ${GLM_LIB}
+  ${ASSIMP_LIB}
   ${CUDART_LIB}
+)
+add_executable(
+  create_input
+  src/create_input.cpp
+  include/create_input.hpp
 )

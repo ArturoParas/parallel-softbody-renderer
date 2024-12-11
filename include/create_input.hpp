@@ -1,5 +1,5 @@
-#ifndef PREPROCESSING_HPP
-#define PREPROCESSING_HPP
+#ifndef CREATE_INPUT_HPP
+#define CREATE_INPUT_HPP
 
 #include <vector>
 #include <unordered_map>
@@ -40,4 +40,4 @@ void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& 
 void write_to_file(
   const std::vector<Pt3>& pts, const std::vector<Spring>& springs, const std::string file);
 
-#endif // PREPROCESSING_HPP
+#endif // CREATE_INPUT_HPP
