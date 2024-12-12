@@ -15,13 +15,14 @@
 #define MAX_RDONLY_CIRCLE 8
 
 #define THREADS_PER_BLOCK 512
-#define GRAVITY_FORCE -0.98
+#define GRAVITY_ACC -0.98
 #define MAX_CIRCLES 100
 #define DAMPING_CONSTANT 0.98
 #define CIRCLE_RADIUS 2.5
 #define K_CONSTANT 2
 #define SPRING_REST_LENGTH 10
 #define DT2 0.01
+#define CIRCLE_MASS 1
 
 #define WIDTH 100
 #define DEPTH 100
@@ -52,7 +53,7 @@ if (code != cudaSuccess)
 //Note that this implementation sacrifices a bit of correctness in exchange for a very efficient access pattern.
 //That is, values that are being updated stay in the cache until they have been completely updated, and subsequent
 //uses of the particle for updating neighboring particles will read the updated value.
-__device__ __inline__ void update_circle_position_cuda_imprecise(){
+__device__ __inline__ void update_circle_position_cuda_imprecise(float* shared_prev_circles, float* shared_curr_circles, uint16_t* nbors_buf){
 
     uint32_t tIdx = threadIdx.x;
 
@@ -70,9 +71,9 @@ __device__ __inline__ void update_circle_position_cuda_imprecise(){
 
             /*-------- Collision Resolution --------*/
 
-            dx = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+0] - circ_x;
-            dy = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+1] - circ_y;
-            dz = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+2] - circ_z;
+            float dx = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+0] - circ_x;
+            float dy = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+1] - circ_y;
+            float dz = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+2] - circ_z;
 
             dist = sqrtf(dx*dx + dy*dy + dz*dz);
             overlap = dist - 2*CIRCLE_RADIUS;
@@ -94,7 +95,7 @@ __device__ __inline__ void update_circle_position_cuda_imprecise(){
             if(i==0){
                 circ_x += (circ_x - shared_prev_circles[3*cIdx + 0]) * DAMPING_CONSTANT;
                 circ_y += (circ_y - shared_prev_circles[3*cIdx + 1]) * DAMPING_CONSTANT;
-                circ_z += (circ_z - shared_prev_circles[3*cIdx + 2]) * DAMPING_CONSTANT + GRAVITY_FORCE*DT2;
+                circ_z += (circ_z - shared_prev_circles[3*cIdx + 2]) * DAMPING_CONSTANT + GRAVITY_ACC*DT2;
             }
 
             dx = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+0] - circ_x;
@@ -156,9 +157,9 @@ __device__ __inline__ void update_circle_position_cuda_precise(float* shared_cur
         float dist,move_amount,overlap;
         for(uint32_t i=0; i < NEIGHBORS_PER_CIRCLE; i++){
 
-            dx = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+0] - shared_curr_circles[3*cIdx + 0];
-            dy = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+1] - shared_curr_circles[3*cIdx + 1];
-            dz = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+2] - shared_curr_circles[3*cIdx + 2];
+            float dx = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+0] - shared_curr_circles[3*cIdx + 0];
+            float dy = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+1] - shared_curr_circles[3*cIdx + 1];
+            float dz = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+2] - shared_curr_circles[3*cIdx + 2];
 
             dist = sqrtf(dx*dx + dy*dy + dz*dz);
             overlap = dist - 2*CIRCLE_RADIUS;
@@ -197,14 +198,14 @@ __device__ __inline__ void update_circle_position_cuda_precise(float* shared_cur
 
         circ_x += (circ_x - shared_prev_circles[3*cIdx + 0]) * DAMPING_CONSTANT;
         circ_y += (circ_y - shared_prev_circles[3*cIdx + 1]) * DAMPING_CONSTANT;
-        circ_z += (circ_z - shared_prev_circles[3*cIdx + 2]) * DAMPING_CONSTANT + GRAVITY_FORCE*DT2/CIRCLE_MASS;
+        circ_z += (circ_z - shared_prev_circles[3*cIdx + 2]) * DAMPING_CONSTANT + GRAVITY_ACC*DT2;
 
         float spring_length_xyz, spring_length_xy,spring_length_xz, x_contrib, y_contrib, z_contrib, signed_force_magnitude; 
         for(uint32_t i=0; i < NEIGHBORS_PER_CIRCLE; i++){
 
-            dx = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+0] - orig_x;
-            dy = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+1] - orig_y;
-            dz = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+2] - orig_z;
+            float dx = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+0] - orig_x;
+            float dy = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+1] - orig_y;
+            float dz = shared_curr_circles[nbors_buf[cIdx + CIRCLES_PER_BLOCK*i]+2] - orig_z;
 
             spring_length_xyz = sqrtf(dx*dx + dy*dy + dz*dz);
             spring_length_xy = sqrtf(dx*dx + dy*dy);
@@ -238,8 +239,8 @@ __device__ __inline__ void update_circle_position_cuda_precise(float* shared_cur
 
 }
 
-__global__ solver_update_cuda(float* device_curr_prev, float* device_curr_circles, 
-                              uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map
+void __global__ solver_update_cuda(float* device_prev_circles, float* device_curr_circles, 
+                              uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map,
                               uint32_t intermediate_steps, uint32_t num_circles){
 
     //Grid will be organized in a linear fashion i.e 0,1,...,n | 0,1,...,n | ... | 0,1,...,n
@@ -248,7 +249,7 @@ __global__ solver_update_cuda(float* device_curr_prev, float* device_curr_circle
     uint32_t gIdx = blockDim.x * bIdx + threadIdx.x; //Global thread index
 
     __shared__ float shared_prev_circles[3*CIRCLES_PER_BLOCK];
-    __shared__ float shared_curr_circles[3*(CIRCLES_PER_BLOCK + MAX_NEIGHBORS_PER_CIRCLE)];
+    __shared__ float shared_curr_circles[3*(CIRCLES_PER_BLOCK + NEIGHBORS_PER_CIRCLE)];
     __shared__ uint16_t nbors_buf[NEIGHBORS_PER_CIRCLE*CIRCLES_PER_BLOCK];
 
     //Populate update circles
