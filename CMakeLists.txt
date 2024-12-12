@@ -10,13 +10,13 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra)
 endif()
 
-find_library(ASSIMP_LIB assimp)
-find_library(GLEW_LIB GLEW)
-find_library(GL_LIB GL)
-find_library(GLM_LIB glm)
 find_library(SFML_GRAPHICS_LIB sfml-graphics)
 find_library(SFML_SYSTEM_LIB sfml-system)
 find_library(SFML_WINDOW_LIB sfml-window)
+find_library(GL_LIB GL)
+find_library(GLEW_LIB GLEW)
+find_library(GLM_LIB glm)
+find_library(ASSIMP_LIB assimp)
 find_library(CUDART_LIB cudart)
 
 add_library(
@@ -33,10 +33,16 @@ add_library(
   src/model.cpp
 )
 
-target_include_directories(renderer PUBLIC ./include)
 target_include_directories(softbody_sim PUBLIC ./include)
+target_include_directories(renderer PUBLIC ./include)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
+add_executable(
+  create_input
+  src/create_input.cpp
+  include/create_input.hpp
+)
+
 target_link_libraries(
   ${PROJECT_NAME}
   softbody_sim
@@ -49,9 +55,4 @@ target_link_libraries(
   ${GLM_LIB}
   ${ASSIMP_LIB}
   ${CUDART_LIB}
-)
-add_executable(
-  create_input
-  src/create_input.cpp
-  include/create_input.hpp
 )
