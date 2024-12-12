@@ -10,10 +10,14 @@
 
 #include "exclusiveScan.cu_inl"
 
+#define CIRCLES_PER_BLOCK 39
+#define SPRINGS_PER_CIRCLE 13
+
 #define THREADS_PER_BLOCK 512
 #define GRAVITY_FORCE -0.98
 #define MAX_CIRCLES 100
 #define DAMPING_CONSTANT 0.98
+#define CIRCLE_RADIUS 2.5
 
 #define min(a,b) (a < b ? a : b)
 #define max(a,b) (a > b ? a : b)
@@ -34,6 +38,103 @@ if (code != cudaSuccess)
 #else
 #define cudaCheckError(ans) ans
 #endif
+
+__device__ __inline__ resolve_collisions_cuda(float* mycircles_curr_buffer, float* mycircles_temp_buffer, float* neighbor_buffer){
+
+    uint32_t tIdx = threadIdx.x;
+
+    //Thread => Circle
+    uint32_t cIdx = tIdx;
+    while(cIdx < CIRCLES_PER_BLOCK){
+
+        float dx,dy,dz,dist,move_amount,overlap;
+        for(uint32_t i=0; i < SPRINGS_PER_CIRCLE; i++){
+
+            //TODO: Account for the fact that not all circles have exactly SPRINGS_PER_CIRCLE springs
+            dx = neighbor_buffer[SPRINGS_PER_CIRCLE*cIdx + i + 0 ] - mycircles_curr_buffer[3*cIdx + 0];
+            dy = neighbor_buffer[SPRINGS_PER_CIRCLE*cIdx + i + 1 ] - mycircles_curr_buffer[3*cIdx + 1];
+            dz = neighbor_buffer[SPRINGS_PER_CIRCLE*cIdx + i + 2 ] - mycircles_curr_buffer[3*cIdx + 2];
+
+            dist = sqrtf(dx*dx + dy*dy + dz*dz);
+            overlap = dist - 2*CIRCLE_RADIUS;
+
+            if(dist-CIRCLE_RADIUS < 0){
+
+                move_amount = overlap * 0.5f / dist;
+
+                mycircles_temp_buffer[3*cIdx + 0] += dx * move_amount;
+                mycircles_temp_buffer[3*cIdx + 1] += dy * move_amount;
+                mycircles_temp_buffer[3*cIdx + 2] += dz * move_amount;
+
+            }
+
+        }
+
+        cIdx += blockDim.x;
+    }
+
+}
+
+__device__ __inline__ move_circles_cuda(){
+
+    
+
+
+
+
+}
+
+
+
+
+__global__ solver_update_cuda(float* circles_prev, float* circles_curr, float* circles_temp, uint16_t springs*){
+
+    //Grid will be organized in a linear fashion i.e 0,1,...,n | 0,1,...,n | ... | 0,1,...,n
+    uint32_t bIdx = blockIdx.x; //Block index
+    uint32_t tIdx = threadIdx.x; //Thread index
+    uint32_t gIdx = blockDim.x * bIdx + threadIdx.x; //Global thread index
+
+    __shared__ float mycircles_prev_buffer[3*CIRCLES_PER_BLOCK];
+    __shared__ float mycircles_curr_buffer[3*CIRCLES_PER_BLOCK];
+    __shared__ float mycircles_temp_buffer[3*CIRCLES_PER_BLOCK];
+
+    uint32_t cIdx = tIdx;
+    while(cIdx < 3*CIRCLES_PER_BLOCK){
+        
+        mycircles_prev_buffer[cIdx] = circles_prev[bIdx*3*CIRCLES_PER_BLOCK+cIdx] 
+        mycircles_curr_buffer[cIdx] = circles_curr[bIdx*3*CIRCLES_PER_BLOCK+cIdx]
+        mycircles_temp_buffer[cIdx] = circles_temp[bIdx*3*CIRCLES_PER_BLOCK+cIdx]
+
+        cIdx += blockDim.x;
+    }
+    __syncthreads();
+
+    __shared__ float neighbor_buffer[3*SPRINGS_PER_CIRCLE*CIRCLES_PER_BLOCK];
+
+    cIdx = tIdx;
+    while(cIdx < SPRINGS_PER_CIRCLE*CIRCLES_PER_BLOCK){
+        neighbor_buffer[cIdx+0] = circles_curr[springs[cIdx]*3+0];
+        neighbor_buffer[cIdx+1] = circles_curr[springs[cIdx]*3+1];
+        neighbor_buffer[cIdx+2] = circles_curr[springs[cIdx]*3+2];
+
+        cIdx += blockDim.x;
+    }
+
+    __syncthreads();
+
+    resolve_collisions_cuda(mycircles_curr_buffer, mycircles_temp_buffer,neighbor_buffer);
+
+    
+
+
+}
+
+
+
+
+
+
+
 
 
 //Assumptions:
