@@ -39,7 +39,14 @@ void get_adjacency_list(
   const int rest_len, const std::unordered_map<Pt3, std::size_t>& pt_to_idx,
   std::vector<std::vector<std::size_t>>& adjacency_list);
 
-void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& springs);
+std::size_t get_particle_idx_bufs(
+  const int update_particles_per_block, const std::size_t num_pts,
+  const std::vector<std::vector<std::size_t>>& adjacency_list,
+  std::vector<std::set<std::size_t>>& rd_only_particle_idx_bufs);
+
+void print_sphere_stats(
+  const std::vector<Pt3>& pts, const std::vector<Spring>& springs,
+  const std::size_t max_rd_only_particles);
 
 void write_to_file(
   const std::vector<Pt3>& pts, const std::vector<std::vector<std::size_t>>& adjacency_list,

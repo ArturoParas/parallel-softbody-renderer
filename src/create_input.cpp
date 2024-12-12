@@ -3,6 +3,8 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <set>
+#include <algorithm>
 
 #include "../include/create_input.hpp"
 
@@ -23,6 +25,7 @@ std::size_t std::hash<Pt3>::operator()(const Pt3& pt) const
   return (hx ^ (hy << 1) >> 1) ^ (hz << 1);
 }
 
+/** TODO: Traverse by blocks with volume of num update circles per block */
 void get_sphere_pts(
   const int rad, const Pt3& center, const int rest_len, std::vector<Pt3>& pts,
   std::unordered_map<Pt3, std::size_t>& pt_to_idx)
@@ -39,7 +42,7 @@ void get_sphere_pts(
         int z2 = z * z;
         if (x2 + y2 + z2 <= rad2) {
           pt_to_idx.insert({Pt3(tx, ty, tz), pt_to_idx.size()});
-          pts.emplace_back(Pt3(tx, ty, tz));
+          pts.push_back(Pt3(tx, ty, tz));
         }
       }
     }
@@ -63,7 +66,7 @@ void get_springs(
           if (dz != 0 || dy != 0 || dx != 0) {
             other.x = pt.x + dx;
             if (pt_to_idx.count(other)) {
-              springs.emplace_back(Spring(idx, pt_to_idx.at(other)));
+              springs.push_back(Spring(idx, pt_to_idx.at(other)));
             }
           }
         }
@@ -90,7 +93,7 @@ void get_adjacency_list(
           if (dz != 0 || dy != 0 || dx != 0) {
             other.x = pt.x + dx;
             if (pt_to_idx.count(other)) {
-              adjacent_indices.emplace_back(pt_to_idx.at(other));
+              adjacent_indices.push_back(pt_to_idx.at(other));
             }
           }
         }
@@ -99,11 +102,45 @@ void get_adjacency_list(
   }
 }
 
-void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& springs)
+std::size_t get_particle_idx_bufs(
+  const int update_particles_per_block, const std::size_t num_pts,
+  const std::vector<std::vector<std::size_t>>& adjacency_list,
+  std::vector<std::set<std::size_t>>& rd_only_particle_idx_bufs)
 {
-  std::cout << "num circles = " << pts.size() << std::endl;
+  std::size_t max_rd_only_particles = 0;
+  for (std::size_t block_offset = 0; block_offset < num_pts; block_offset += update_particles_per_block) {
+    // std::vector<Pt3>& particle_idx_buf = particle_idx_bufs[block_offset / update_particle_per_block];
+    std::set<std::size_t> rd_only_particle_idx_set;
+    std::size_t loop_guard = std::min(block_offset + update_particles_per_block, num_pts); 
+    for (std::size_t i = block_offset; i < loop_guard; i++) {
+      for (const auto& pt_idx : adjacency_list[i]) {
+        if (pt_idx < block_offset || block_offset + update_particles_per_block <= pt_idx) {
+          rd_only_particle_idx_set.insert(pt_idx);
+        }
+      }
+    }
+    max_rd_only_particles = std::max(max_rd_only_particles, rd_only_particle_idx_set.size());
+    rd_only_particle_idx_bufs.push_back(rd_only_particle_idx_set);
+  }
+  return max_rd_only_particles;
+}
+
+void get_nbors_buf(
+  const int update_particles_per_block,
+  const std::vector<std::vector<std::size_t>>& adjacency_list,
+  std::vector<std::set<std::size_t>>& rd_only_particle_idx_bufs)
+{
+  ;
+}
+
+void print_sphere_stats(
+  const std::vector<Pt3>& pts, const std::vector<Spring>& springs,
+  const std::size_t max_rd_only_particles)
+{
+  std::cout << "num pts = " << pts.size() << std::endl;
   std::cout << "num springs = " << springs.size() << std::endl;
-  std::cout << "num springs / circle = " << (float)springs.size() / (float)pts.size() << std::endl;
+  std::cout << "num springs / pts = " << (float)springs.size() / (float)pts.size() << std::endl;
+  std::cout << "max number of read only particles = " << max_rd_only_particles << std::endl;
 }
 
 void write_to_file(
@@ -159,8 +196,13 @@ int main(int argc, char* argv[])
   get_sphere_pts(rad, center, rest_len, pts, pt_to_idx);
   std::vector<std::vector<std::size_t>> adjacency_list(pts.size());
   get_adjacency_list(rest_len, pt_to_idx, adjacency_list);
+  /** TODO: Analyze what update_particles_per_block should be */
+  int update_particles_per_block = 128;
+  std::vector<std::set<std::size_t>> rd_only_particle_idx_bufs;
+  std::size_t max_rd_only_particles = get_particle_idx_bufs(
+    update_particles_per_block, pts.size(), adjacency_list, rd_only_particle_idx_bufs);
   get_springs(rest_len, pt_to_idx, springs);
-  print_sphere_stats(pts, springs);
+  print_sphere_stats(pts, springs, max_rd_only_particles);
   write_to_file(pts, adjacency_list, file);
   return 0;
 }
