@@ -35,9 +35,14 @@ void get_springs(
   const int rest_len, std::unordered_map<Pt3, std::size_t>& pt_to_idx,
   std::vector<Spring>& springs);
 
+void get_adjacency_list(
+  const int rest_len, const std::unordered_map<Pt3, std::size_t>& pt_to_idx,
+  std::vector<std::vector<std::size_t>>& adjacency_list);
+
 void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& springs);
 
 void write_to_file(
-  const std::vector<Pt3>& pts, const std::vector<Spring>& springs, const std::string file);
+  const std::vector<Pt3>& pts, const std::vector<std::vector<std::size_t>>& adjacency_list,
+  const std::string file);
 
 #endif // CREATE_INPUT_HPP

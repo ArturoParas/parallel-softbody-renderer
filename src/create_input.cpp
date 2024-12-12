@@ -3,7 +3,6 @@
 #include <iostream>
 #include <string>
 #include <fstream>
-#include <iterator>
 
 #include "../include/create_input.hpp"
 
@@ -74,6 +73,32 @@ void get_springs(
   }
 }
 
+void get_adjacency_list(
+  const int rest_len, const std::unordered_map<Pt3, std::size_t>& pt_to_idx,
+  std::vector<std::vector<std::size_t>>& adjacency_list)
+{
+  for (const auto& i : pt_to_idx) {
+    Pt3 pt = i.first;
+    std::size_t idx = i.second;
+    Pt3 other(pt.x, pt.y, pt.z);
+    std::vector<std::size_t>& adjacent_indices = adjacency_list[idx];
+    for (int dz = -rest_len; dz <= rest_len; dz += rest_len) {
+      other.z = pt.z + dz;
+      for (int dy = -rest_len; dy <= rest_len; dy += rest_len) {
+        other.y = pt.y + dy;
+        for (int dx = -rest_len; dx <= rest_len; dx += rest_len) {
+          if (dz != 0 || dy != 0 || dx != 0) {
+            other.x = pt.x + dx;
+            if (pt_to_idx.count(other)) {
+              adjacent_indices.emplace_back(pt_to_idx.at(other));
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& springs)
 {
   std::cout << "num circles = " << pts.size() << std::endl;
@@ -82,16 +107,19 @@ void print_sphere_stats(const std::vector<Pt3>& pts, const std::vector<Spring>& 
 }
 
 void write_to_file(
-  const std::vector<Pt3>& pts, const std::vector<Spring>& springs, const std::string file)
+  const std::vector<Pt3>& pts, const std::vector<std::vector<std::size_t>>& adjacency_list,
+  const std::string file)
 {
   std::ofstream of("../inputs/" + file);
   of << pts.size() << "\n";
   for (const auto& pt : pts) {
     of << pt.x << " " << pt.y << " " << pt.z << "\n";
   }
-  of << springs.size() << "\n";
-  for (const auto& spring : springs) {
-    of << spring.idx1 << " " << spring.idx2 << "\n";
+  for (const auto& adjacent_indices : adjacency_list) {
+    for (const auto& idx : adjacent_indices) {
+      of << idx << " ";
+    }
+    of << "\n";
   }
 }
 
@@ -129,8 +157,10 @@ int main(int argc, char* argv[])
   std::unordered_map<Pt3, std::size_t> pt_to_idx;
   std::vector<Spring> springs;
   get_sphere_pts(rad, center, rest_len, pts, pt_to_idx);
+  std::vector<std::vector<std::size_t>> adjacency_list(pts.size());
+  get_adjacency_list(rest_len, pt_to_idx, adjacency_list);
   get_springs(rest_len, pt_to_idx, springs);
   print_sphere_stats(pts, springs);
-  write_to_file(pts, springs, file);
+  write_to_file(pts, adjacency_list, file);
   return 0;
 }
