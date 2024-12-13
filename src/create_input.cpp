@@ -5,17 +5,20 @@
 #include <fstream>
 #include <set>
 #include <algorithm>
+#include <cmath>
 
 #include "../include/create_input.hpp"
 
+#define NBORS_PER_PT 26
+
 Pt3::Pt3(const float x_, const float y_, const float z_) : x(x_), y(y_), z(z_) {};
+
+Pt3::Pt3() : x(0), y(0), z(0) {};
 
 bool Pt3::operator==(const Pt3& other) const
 {
   return (x == other.x && y == other.y && z == other.z);
 }
-
-Spring::Spring(const std::size_t idx1_, const std::size_t idx2_) : idx1(idx1_), idx2(idx2_) {};
 
 std::size_t std::hash<Pt3>::operator()(const Pt3& pt) const
 {
@@ -25,139 +28,267 @@ std::size_t std::hash<Pt3>::operator()(const Pt3& pt) const
   return (hx ^ (hy << 1) >> 1) ^ (hz << 1);
 }
 
-/** TODO: Traverse by blocks with volume of num update circles per block */
+std::vector<int> block_threads_to_dims(const int block_threads, const int rest_len)
+{
+  std::vector<int> dims;
+  if (block_threads == 320) {
+    dims.push_back(8 * rest_len);
+    dims.push_back(8 * rest_len);
+    dims.push_back(5 * rest_len);
+  } else {
+    std::cerr << "No conversion from given blocks per thread (" << block_threads
+      << ") to block dims" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  return dims;
+}
+
 void get_sphere_pts(
-  const int rad, const Pt3& center, const int rest_len, std::vector<Pt3>& pts,
-  std::unordered_map<Pt3, std::size_t>& pt_to_idx)
+  const int block_threads, const int rad, const Pt3& center, const int rest_len,
+  std::vector<std::vector<Pt3>>& pts, std::unordered_map<Pt3, int>& pt_idxs)
 {
   int rad2 = rad * rad;
-  for (int tx = -rad; tx <= rad; tx += rest_len) {
-    int x = tx - center.x;
-    int x2 = x * x;
-    for (int ty = -rad; ty <= rad; ty += rest_len) {
-      int y = ty - center.y;
-      int y2 = y * y;
-      for (int tz = -rad; tz <= rad; tz += rest_len) {
-        int z = tz - center.z;
-        int z2 = z * z;
-        if (x2 + y2 + z2 <= rad2) {
-          pt_to_idx.insert({Pt3(tx, ty, tz), pt_to_idx.size()});
-          pts.push_back(Pt3(tx, ty, tz));
+  std::vector<int> block_dims = block_threads_to_dims(block_threads, rest_len);
+  int block_idx = 0;
+  for (int z_block_off = -rad; z_block_off <= rad; z_block_off += block_dims.at(2)) {
+    int z_block_next = std::min(z_block_off + block_dims.at(2), rad);
+    for (int y_block_off = -rad; y_block_off <= rad; y_block_off += block_dims.at(1)) {
+      int y_block_next = std::min(y_block_off + block_dims.at(1), rad);
+      for (int x_block_off = -rad; x_block_off <= rad; x_block_off += block_dims.at(0)) {
+        std::vector<Pt3> block_pts;
+        int x_block_next = std::min(x_block_off + block_dims.at(0), rad);
+        for (int z = z_block_off; z < z_block_next; z += rest_len) {
+          int z2 = z * z;
+          for (int y = y_block_off; y < y_block_next; y += rest_len) {
+            int y2 = y * y;
+            for (int x = x_block_off; x < x_block_next; x += rest_len) {
+              int x2 = x * x;
+              if (x2 + y2 + z2 <= rad2) {
+                int idx = block_idx * block_threads + block_pts.size();
+                pt_idxs.insert({Pt3(x + center.x, y + center.y, z + center.z), idx});
+                block_pts.push_back(Pt3(x + center.x, y + center.y, z + center.z));
+              }
+            }
+          }
+        }
+        if (block_pts.size() != 0) {
+          pts.push_back(block_pts);
+          block_idx++;
         }
       }
     }
   }
 }
 
-void get_springs(
-  const int rest_len, std::unordered_map<Pt3, std::size_t>& pt_to_idx,
-  std::vector<Spring>& springs)
+void get_adj_list(
+  const int rest_len, const std::vector<std::vector<Pt3>>& pts,
+  const std::unordered_map<Pt3, int>& pt_idxs, std::vector<std::vector<int>>& adj_list)
 {
-  auto it = pt_to_idx.begin();
-  while (it != pt_to_idx.end()) {
-    Pt3 pt = it->first;
-    std::size_t idx = it->second;
-    Pt3 other(pt.x, pt.y, pt.z);
-    for (int dz = -rest_len; dz <= rest_len; dz += rest_len) {
-      other.z = pt.z + dz;
-      for (int dy = -rest_len; dy <= rest_len; dy += rest_len) {
-        other.y = pt.y + dy;
-        for (int dx = -rest_len; dx <= rest_len; dx += rest_len) {
-          if (dz != 0 || dy != 0 || dx != 0) {
-            other.x = pt.x + dx;
-            if (pt_to_idx.count(other)) {
-              springs.push_back(Spring(idx, pt_to_idx.at(other)));
+  for (const auto& block : pts) {
+    for (const auto& pt : block) {
+      std::vector<int> adj_pts;
+      Pt3 pt_adj;
+      for (int dz = -rest_len; dz <= rest_len; dz += rest_len) {
+        pt_adj.z = pt.z + dz;
+        for (int dy = -rest_len; dy <= rest_len; dy += rest_len) {
+          pt_adj.y = pt.y + dy;
+          for (int dx = -rest_len; dx <= rest_len; dx += rest_len) {
+            pt_adj.x = pt.x + dx;
+            if ((dz != 0 || dy != 0 || dx != 0) && (pt_idxs.count(pt_adj))) {
+              adj_pts.push_back(pt_idxs.at(pt_adj));
             }
           }
         }
       }
+      adj_list.push_back(adj_pts);
     }
-    it = pt_to_idx.erase(it);
   }
 }
 
-void get_adjacency_list(
-  const int rest_len, const std::unordered_map<Pt3, std::size_t>& pt_to_idx,
-  std::vector<std::vector<std::size_t>>& adjacency_list)
+void get_rd_only_idxs(
+  const int block_threads, const std::vector<std::vector<Pt3>>& pts,
+  const std::vector<std::vector<int>>& adj_list, std::vector<std::vector<int>>& rd_only_idxs)
 {
-  for (const auto& i : pt_to_idx) {
-    Pt3 pt = i.first;
-    std::size_t idx = i.second;
-    Pt3 other(pt.x, pt.y, pt.z);
-    std::vector<std::size_t>& adjacent_indices = adjacency_list[idx];
-    for (int dz = -rest_len; dz <= rest_len; dz += rest_len) {
-      other.z = pt.z + dz;
-      for (int dy = -rest_len; dy <= rest_len; dy += rest_len) {
-        other.y = pt.y + dy;
-        for (int dx = -rest_len; dx <= rest_len; dx += rest_len) {
-          if (dz != 0 || dy != 0 || dx != 0) {
-            other.x = pt.x + dx;
-            if (pt_to_idx.count(other)) {
-              adjacent_indices.push_back(pt_to_idx.at(other));
-            }
+  int adj_start = 0;
+  for (int block_idx = 0; block_idx < pts.size(); block_idx++) {
+    int block_start = block_idx * block_threads;
+    int block_end = block_start + pts.at(block_idx).size();
+    std::set<int> block_rd_only_idxs;
+    for (int off = 0; off < pts.at(block_idx).size(); off++) {
+      for (const auto& adj_pt_idx : adj_list.at(adj_start + off)) {
+        if (adj_pt_idx < block_start || block_end <= adj_pt_idx) {
+          block_rd_only_idxs.insert(adj_pt_idx);
+        }
+      }
+    }
+    adj_start += pts.at(block_idx).size();
+    rd_only_idxs.push_back(std::vector<int>(block_rd_only_idxs.begin(), block_rd_only_idxs.end()));
+  }
+}
+
+void get_nbors_bufs(
+  const int block_threads, const std::vector<std::vector<Pt3>>& pts,
+  const std::vector<std::vector<int>>& adj_list, const std::vector<std::vector<int>>& rd_only_idxs,
+  std::vector<std::vector<int>>& nbors_bufs)
+{
+  int adj_start = 0;
+  for (int block_idx = 0; block_idx < pts.size(); block_idx++) {
+    int block_start = block_idx * block_threads;
+    int block_end = block_start + pts.at(block_idx).size();
+    const std::vector<int>& block_rd_only_idxs = rd_only_idxs.at(block_idx);
+    std::vector<int> nbors_buf;
+    for (int nbor = 0; nbor < NBORS_PER_PT; nbor++) {
+      for (int off = 0; off < pts.at(block_idx).size(); off++) {
+        const std::vector<int>& nbor_pts = adj_list.at(adj_start + off);
+        if (nbor < nbor_pts.size()) {
+          int nbor_idx = nbor_pts.at(nbor);
+          if (block_start <= nbor_idx && nbor_idx < block_end) {
+            nbors_buf.push_back(nbor_idx - block_start);
+          } else {
+            auto it = std::lower_bound(
+              block_rd_only_idxs.begin(), block_rd_only_idxs.end(), nbor_idx);
+            nbors_buf.push_back(it - block_rd_only_idxs.begin() + pts.at(block_idx).size());
           }
+        } else {
+          nbors_buf.push_back(-1);
         }
       }
     }
+    adj_start += pts.at(block_idx).size();
+    nbors_bufs.push_back(nbors_buf);
   }
-}
-
-std::size_t get_particle_idx_bufs(
-  const int update_particles_per_block, const std::size_t num_pts,
-  const std::vector<std::vector<std::size_t>>& adjacency_list,
-  std::vector<std::set<std::size_t>>& rd_only_particle_idx_bufs)
-{
-  std::size_t max_rd_only_particles = 0;
-  for (std::size_t block_offset = 0; block_offset < num_pts; block_offset += update_particles_per_block) {
-    // std::vector<Pt3>& particle_idx_buf = particle_idx_bufs[block_offset / update_particle_per_block];
-    std::set<std::size_t> rd_only_particle_idx_set;
-    std::size_t loop_guard = std::min(block_offset + update_particles_per_block, num_pts); 
-    for (std::size_t i = block_offset; i < loop_guard; i++) {
-      for (const auto& pt_idx : adjacency_list[i]) {
-        if (pt_idx < block_offset || block_offset + update_particles_per_block <= pt_idx) {
-          rd_only_particle_idx_set.insert(pt_idx);
-        }
-      }
-    }
-    max_rd_only_particles = std::max(max_rd_only_particles, rd_only_particle_idx_set.size());
-    rd_only_particle_idx_bufs.push_back(rd_only_particle_idx_set);
-  }
-  return max_rd_only_particles;
-}
-
-void get_nbors_buf(
-  const int update_particles_per_block,
-  const std::vector<std::vector<std::size_t>>& adjacency_list,
-  std::vector<std::set<std::size_t>>& rd_only_particle_idx_bufs)
-{
-  ;
-}
-
-void print_sphere_stats(
-  const std::vector<Pt3>& pts, const std::vector<Spring>& springs,
-  const std::size_t max_rd_only_particles)
-{
-  std::cout << "num pts = " << pts.size() << std::endl;
-  std::cout << "num springs = " << springs.size() << std::endl;
-  std::cout << "num springs / pts = " << (float)springs.size() / (float)pts.size() << std::endl;
-  std::cout << "max number of read only particles = " << max_rd_only_particles << std::endl;
 }
 
 void write_to_file(
-  const std::vector<Pt3>& pts, const std::vector<std::vector<std::size_t>>& adjacency_list,
-  const std::string file)
+  const std::vector<std::vector<Pt3>>& pts, const std::vector<std::vector<int>>& rd_only_idxs,
+  const std::vector<std::vector<int>>& nbors_bufs, const std::string file)
 {
   std::ofstream of("../inputs/" + file);
+
+  // Points!
+  // [num blocks]
   of << pts.size() << "\n";
-  for (const auto& pt : pts) {
-    of << pt.x << " " << pt.y << " " << pt.z << "\n";
-  }
-  for (const auto& adjacent_indices : adjacency_list) {
-    for (const auto& idx : adjacent_indices) {
-      of << idx << " ";
+  for (const auto& block : pts) {
+    // [num pts in block]
+    of << block.size() << "\n";
+    for (const auto& pt : block) {
+      // [pt in block]
+      of << pt.x << " " << pt.y << " " << pt.z << "\n";
     }
+  }
+
+  // Read only indices:
+  for (const auto& block_rd_only_idxs : rd_only_idxs) {
+    // [num read only pts in block]
+    of << block_rd_only_idxs.size() << "\n";
+    for (const auto& rd_only_idx : block_rd_only_idxs) {
+      // [idx of read only point in global pts buff]
+      of << rd_only_idx << " ";
+    }
+    // next block
     of << "\n";
   }
+
+  // Nbors bufs:
+  for (const auto& nbors_buf : nbors_bufs) {
+    for (const auto& nbor : nbors_buf) {
+      // [idx of a points neighbor in nbors buff]
+      of << nbor << " ";
+    }
+    // next block
+    of << "\n";
+  }
+}
+
+void print_sphere_stats(
+  const std::vector<std::vector<Pt3>>& pts, const std::vector<std::vector<int>>& adj_list,
+  const std::vector<std::vector<int>>& rd_only_idxs,
+  const std::vector<std::vector<int>>& nbors_bufs)
+{
+  int num_blocks = pts.size();
+  int num_pts = 0;
+  int max_pts = 0;
+  int min_pts = __INT_MAX__;
+  for (const auto& block : pts) {
+    num_pts += block.size();
+    max_pts = std::max(max_pts, (int)block.size());
+    min_pts = std::min(min_pts, (int)block.size());
+  }
+  std::cout << "num blocks = " << num_blocks << std::endl;
+  std::cout << "num points = " << num_pts << std::endl;
+  std::cout << "num points per block = " << (float)num_pts / num_blocks << std::endl;
+  std::cout << "max points in a block = " << max_pts << std::endl;
+  std::cout << "min points in a block = " << min_pts << std::endl;
+
+  int num_adj_entries = adj_list.size();
+  float num_springs = 0;
+  int max_nbors = 0;
+  int min_nbors = NBORS_PER_PT;
+  for (const auto& adj_pts : adj_list) {
+    num_springs += adj_pts.size();
+    max_nbors = std::max(max_nbors, (int)adj_pts.size());
+    min_nbors = std::min(min_nbors, (int)adj_pts.size());
+  }
+  num_springs /= 2;
+  std::cout << std::endl;
+  std::cout << "num adjacency entries = " << num_adj_entries << std::endl;
+  std::cout << "num springs = " << num_springs << std::endl;
+  std::cout << "num springs per block = " << num_springs / num_blocks << std::endl;
+  std::cout << "num springs per point = " << num_springs / num_pts << std::endl;
+  std::cout << "max neighbors for a point = " << max_nbors << std::endl;
+  std::cout << "min neighbors for a point = " << min_nbors << std::endl;
+
+  int num_rd_only_entries = rd_only_idxs.size();
+  int num_rd_only = 0;
+  int max_rd_only = 0;
+  int min_rd_only = __INT_MAX__;
+  for (const auto& block_rd_only_idxs : rd_only_idxs) {
+    num_rd_only += block_rd_only_idxs.size();
+    max_rd_only = std::max(max_rd_only, (int)block_rd_only_idxs.size());
+    min_rd_only = std::min(min_rd_only, (int)block_rd_only_idxs.size());
+  }
+  std::cout << std::endl;
+  std::cout << "num read only entries = " << num_rd_only_entries << std::endl;
+  std::cout << "num read only points = " << num_rd_only << std::endl;
+  std::cout << "num read only points per block = " << (float)num_rd_only / num_blocks << std::endl;
+  std::cout << "max read only points in a block = " << max_rd_only << std::endl;
+  std::cout << "min read only points in a block = " << min_rd_only << std::endl;
+
+  int num_nbors_bufs_entries = nbors_bufs.size();
+  num_springs = 0;
+  int num_garbage = 0;
+  float max_springs = 0;
+  int max_garbage = 0;
+  int max_buf_size = 0;
+  int max_nbor = 0;
+  for (const auto& nbors_buf : nbors_bufs) {
+    int block_springs = 0;
+    int block_garbage = 0;
+    for (const auto& nbor : nbors_buf) {
+      if (nbor == -1) {
+        num_garbage++;
+        block_garbage++;
+      } else {
+        num_springs++;
+        block_springs++;
+      }
+      max_nbor = std::max(max_nbor, nbor);
+    }
+    max_springs = std::max(max_springs, (float)block_springs);
+    max_garbage = std::max(max_garbage, block_garbage);
+    max_buf_size = std::max(max_buf_size, (int)nbors_buf.size());
+  }
+  num_springs /= 2;
+  max_springs /= 2;
+  std::cout << std::endl;
+  std::cout << "num neighbors bufs entires = " << num_nbors_bufs_entries << std::endl;
+  std::cout << "num springs = " << num_springs << std::endl;
+  std::cout << "num garbage = " << num_garbage << std::endl;
+  std::cout << "num garbage per block = " << (float)num_garbage / num_blocks << std::endl;
+  std::cout << "max springs in a block = " << max_springs << std::endl;
+  std::cout << "max garbage in a block = " << max_garbage << std::endl;
+  std::cout << "max buffer size = " << max_buf_size << std::endl;
+  std::cout << "max neighbor index = " << max_nbor << std::endl;
 }
 
 int main(int argc, char* argv[])
@@ -171,6 +302,7 @@ int main(int argc, char* argv[])
   int rad = 53;
   int rest_len = 4;
   Pt3 center(0, 0, 0);
+  int block_threads = 320;
 
   if (argc > 1) {
     file = argv[1];
@@ -190,19 +322,17 @@ int main(int argc, char* argv[])
     center.z = strtol(argv[6], &end, 10);
   }
 
-  std::vector<Pt3> pts;
-  std::unordered_map<Pt3, std::size_t> pt_to_idx;
-  std::vector<Spring> springs;
-  get_sphere_pts(rad, center, rest_len, pts, pt_to_idx);
-  std::vector<std::vector<std::size_t>> adjacency_list(pts.size());
-  get_adjacency_list(rest_len, pt_to_idx, adjacency_list);
-  /** TODO: Analyze what update_particles_per_block should be */
-  int update_particles_per_block = 128;
-  std::vector<std::set<std::size_t>> rd_only_particle_idx_bufs;
-  std::size_t max_rd_only_particles = get_particle_idx_bufs(
-    update_particles_per_block, pts.size(), adjacency_list, rd_only_particle_idx_bufs);
-  get_springs(rest_len, pt_to_idx, springs);
-  print_sphere_stats(pts, springs, max_rd_only_particles);
-  write_to_file(pts, adjacency_list, file);
+  std::vector<std::vector<Pt3>> pts;
+  std::unordered_map<Pt3, int> pt_idxs;
+  std::vector<std::vector<int>> adj_list;
+  std::vector<std::vector<int>> rd_only_idxs;
+  std::vector<std::vector<int>> nbors_bufs;
+
+  get_sphere_pts(block_threads, rad, center, rest_len, pts, pt_idxs);
+  get_adj_list(rest_len, pts, pt_idxs, adj_list);
+  get_rd_only_idxs(block_threads, pts, adj_list, rd_only_idxs);
+  get_nbors_bufs(block_threads, pts, adj_list, rd_only_idxs, nbors_bufs);
+  write_to_file(pts, rd_only_idxs, nbors_bufs, file);
+  print_sphere_stats(pts, adj_list, rd_only_idxs, nbors_bufs);
   return 0;
 }

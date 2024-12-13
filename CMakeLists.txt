@@ -18,6 +18,7 @@ find_library(GLEW_LIB GLEW)
 find_library(GLM_LIB glm)
 find_library(ASSIMP_LIB assimp)
 find_library(CUDART_LIB cudart)
+find_path(CUDA_INCLUDE cuda_runtime.h)
 
 add_library(
   softbody_sim STATIC
@@ -42,6 +43,8 @@ add_executable(
   src/create_input.cpp
   include/create_input.hpp
 )
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${CUDA_INCLUDE})
 
 target_link_libraries(
   ${PROJECT_NAME}

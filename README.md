@@ -3,7 +3,7 @@ Build on the GHC machines containing NVIDIA GeForce RTX 2080 B GPUs. These have 
 ```
 mkdir build
 cd build
-cmake .. "-DCMAKE_PREFIX_PATH=lib;/usr/local/cuda-11.7/lib64"
+cmake .. "-DCMAKE_PREFIX_PATH=lib;/usr/local/cuda-11.7/lib64;/usr/local/cuda-11.7/include"
 make
 ```
 Now to run the code, execute the following command in the build directory:

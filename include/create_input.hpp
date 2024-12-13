@@ -8,17 +8,11 @@
 struct Pt3
 {
   Pt3(const float x_, const float y_, const float z_);
+  Pt3();
   float x;
   float y;
   float z;
   bool operator==(const Pt3& other) const;
-};
-
-struct Spring
-{
-  Spring(const std::size_t idx1_, const std::size_t idx2_);
-  std::size_t idx1;
-  std::size_t idx2;
 };
 
 template <>
@@ -27,29 +21,32 @@ struct std::hash<Pt3>
   std::size_t operator()(const Pt3& pt) const;
 };
 
-void get_sphere_pts(
-  const int rad, const Pt3& center, const int rest_len, std::vector<Pt3>& pts,
-  std::unordered_map<Pt3, std::size_t>& pt_to_idx);
+std::vector<int> block_threads_to_dims(const int block_threads, const int rest_len);
 
-void get_springs(
-  const int rest_len, std::unordered_map<Pt3, std::size_t>& pt_to_idx,
-  std::vector<Spring>& springs);
+void get_sphere_pts(
+  const int block_threads, const int rad, const Pt3& center, const int rest_len,
+  std::vector<std::vector<Pt3>>& pts, std::unordered_map<Pt3, int>& pt_idxs);
 
 void get_adjacency_list(
-  const int rest_len, const std::unordered_map<Pt3, std::size_t>& pt_to_idx,
-  std::vector<std::vector<std::size_t>>& adjacency_list);
+  const int rest_len, const std::vector<Pt3>& pts, const std::unordered_map<Pt3, int>& pt_idxs,
+  std::vector<std::vector<int>>& adj_list);
 
-std::size_t get_particle_idx_bufs(
-  const int update_particles_per_block, const std::size_t num_pts,
-  const std::vector<std::vector<std::size_t>>& adjacency_list,
-  std::vector<std::set<std::size_t>>& rd_only_particle_idx_bufs);
+void get_rd_only_idxs(
+  const int block_threads, const std::vector<std::vector<Pt3>>& pts,
+  const std::vector<std::vector<int>>& adj_list, std::vector<std::vector<int>>& rd_only_idxs);
 
-void print_sphere_stats(
-  const std::vector<Pt3>& pts, const std::vector<Spring>& springs,
-  const std::size_t max_rd_only_particles);
+void get_nbors_bufs(
+  const int block_threads, const std::vector<std::vector<Pt3>>& pts,
+  const std::vector<std::vector<int>>& adj_list, const std::vector<std::vector<int>>& rd_only_idxs,
+  std::vector<std::vector<int>>& nbors_bufs);
 
 void write_to_file(
-  const std::vector<Pt3>& pts, const std::vector<std::vector<std::size_t>>& adjacency_list,
-  const std::string file);
+  const std::vector<std::vector<Pt3>>& pts, const std::vector<std::vector<int>>& rd_only_idxs,
+  const std::vector<std::vector<int>>& nbors_bufs, const std::string file);
+
+void print_sphere_stats(
+  const std::vector<std::vector<Pt3>>& pts, const std::vector<std::vector<int>>& adj_list,
+  const std::vector<std::vector<int>>& rd_only_idxs,
+  const std::vector<std::vector<int>>& nbors_bufs);
 
 #endif // CREATE_INPUT_HPP
