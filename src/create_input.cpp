@@ -147,7 +147,7 @@ void get_nbors_bufs(
           } else {
             auto it = std::lower_bound(
               block_rd_only_idxs.begin(), block_rd_only_idxs.end(), nbor_idx);
-            nbors_buf.push_back(it - block_rd_only_idxs.begin() + pts.at(block_idx).size());
+            nbors_buf.push_back(it - block_rd_only_idxs.begin() + block_threads);
           }
         } else {
           nbors_buf.push_back(-1);
