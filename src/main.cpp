@@ -33,7 +33,7 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-#define THREADS_PER_BLOCK 320
+#define THREADS_PER_BLOCK 16
 
 void solver_update(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
 
@@ -300,9 +300,9 @@ int main()
             obj.position.y = host_curr_circles[3*obj.tag+1];
             obj.position.z = host_curr_circles[3*obj.tag+2];
             
-            if (i == 0) {
-              std::cout << i << ": " << obj.position.x << " " << obj.position.z << std::endl;
-            }
+            // if (i == 0) {
+            //   std::cout << i << ": " << obj.position.x << " " << obj.position.z << std::endl;
+            // }
 
             obj.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
         }

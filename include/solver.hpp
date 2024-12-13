@@ -31,10 +31,10 @@ struct SolverInfo{
   uint32_t threads_per_block;
 
   SolverInfo(uint32_t _width=1000, uint32_t _depth=1000, uint32_t _height=1000, 
-             float _circle_radius=1.f, float _circle_mass = 1.f,float _k_constant=2.f, float _spring_rest_length=10.f,
+             float _circle_radius=0.25f, float _circle_mass = 1.f,float _k_constant=2.f, float _spring_rest_length=10.f,
              float _damping_constant=2.f, float _gravity_force=-0.98f,
              uint32_t _intermediate_steps=8, float _dt=0.1f, 
-             uint32_t _num_blocks=1, uint32_t _threads_per_block=320) 
+             uint32_t _num_blocks=1, uint32_t _threads_per_block=16) 
 
     : width(_width), depth(_depth), height(_height), 
       circle_radius(_circle_radius), circle_mass(_circle_mass), k_constant(_k_constant), spring_rest_length(_spring_rest_length), 

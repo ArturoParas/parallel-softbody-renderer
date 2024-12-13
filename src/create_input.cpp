@@ -36,6 +36,10 @@ std::vector<int> block_threads_to_dims(const int block_threads, const int rest_l
     dims.push_back(8 * rest_len);
     dims.push_back(8 * rest_len);
     dims.push_back(5 * rest_len);
+  } else if (block_threads == 16) {
+    dims.push_back(4 * rest_len);
+    dims.push_back(2 * rest_len);
+    dims.push_back(2 * rest_len);
   } else {
     std::cerr << "No conversion from given blocks per thread (" << block_threads
       << ") to block dims" << std::endl;
@@ -306,13 +310,16 @@ int main(int argc, char* argv[])
 
   int opt;
   char* end;
-  while ((opt = getopt(argc, argv, "r:l:")) != EOF) {
+  while ((opt = getopt(argc, argv, "r:l:t:")) != EOF) {
     switch (opt) {
     case 'r':
       rad = strtol(optarg, &end, 10);
       break;
     case 'l':
       rest_len = strtol(optarg, &end, 10);
+      break;
+    case 't':
+      block_threads = strtol(optarg, &end, 10);
       break;
     default:
       std::cout << "Given optargs not valid" << std::endl;
