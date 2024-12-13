@@ -169,6 +169,7 @@ int main()
     softbody_sim::SolverInfo solver_info;
     solver_info.num_blocks = num_blocks;
     solver_info.spring_rest_length = spring_rest_length;
+    std::cout << solver_info.num_blocks << std::endl; 
 
 
     //Environment
@@ -299,7 +300,9 @@ int main()
             obj.position.y = host_curr_circles[3*obj.tag+1];
             obj.position.z = host_curr_circles[3*obj.tag+2];
             
-            // std::cout << i << ": "<<   obj.position.x<<" "<<  obj.position.z<< std::endl;
+            if (i == 0) {
+              std::cout << i << ": " << obj.position.x << " " << obj.position.z << std::endl;
+            }
 
             obj.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
         }
