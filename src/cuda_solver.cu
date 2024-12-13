@@ -313,5 +313,3 @@ void solver_update(float* host_curr_circles, float* device_curr_circles, float* 
     cudaMemcpy(host_curr_circles, device_curr_circles, 3*solver_info.num_blocks*THREADS_PER_BLOCK,cudaMemcpyDeviceToHost);
 
 }
-
-

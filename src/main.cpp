@@ -24,7 +24,7 @@
 #include <solver.hpp>
 #include <cuda_runtime.h>
 
-#define MOVE_SPEED 5.f
+#define MOVE_SPEED 50.f
 #define MOUSE_SENSITIVITY 4.f
 
 #define MAX_RDONLY_NEIGHBORS 380
@@ -306,7 +306,7 @@ int main()
         }
 
         window.display();
-        std::this_thread::sleep_for(std::chrono::milliseconds((int)(50)));
+        std::this_thread::sleep_for(std::chrono::milliseconds((int)(15)));
 
     }
 

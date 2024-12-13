@@ -6,6 +6,7 @@
 #include <set>
 #include <algorithm>
 #include <cmath>
+#include <getopt.h>
 
 #include "../include/create_input.hpp"
 
@@ -160,10 +161,14 @@ void get_nbors_bufs(
 }
 
 void write_to_file(
-  const std::vector<std::vector<Pt3>>& pts, const std::vector<std::vector<int>>& rd_only_idxs,
+  const int rad, const int rest_len, const std::vector<std::vector<Pt3>>& pts,
+  const std::vector<std::vector<int>>& rd_only_idxs,
   const std::vector<std::vector<int>>& nbors_bufs, const std::string file)
 {
   std::ofstream of("../inputs/" + file);
+
+  // Sphere:
+  of << rad << " " << rest_len << "\n";
 
   // Points!
   // [num blocks]
@@ -293,33 +298,26 @@ void print_sphere_stats(
 
 int main(int argc, char* argv[])
 {
-  if (argc > 7) {
-    std::cerr << "Too many arguments" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
   std::string file = "sphere.txt";
   int rad = 53;
   int rest_len = 4;
   Pt3 center(0, 0, 0);
   int block_threads = 320;
 
-  if (argc > 1) {
-    file = argv[1];
-  }
-  if (argc > 2) {
-    char* end;
-    rad = strtol(argv[2], &end, 10);
-  }
-  if (argc > 3) {
-    char* end;
-    rest_len = strtol(argv[3], &end, 10);
-  }
-  if (argc == 6) {
-    char* end;
-    center.x = strtol(argv[4], &end, 10);
-    center.y = strtol(argv[5], &end, 10);
-    center.z = strtol(argv[6], &end, 10);
+  int opt;
+  char* end;
+  while ((opt = getopt(argc, argv, "r:l:")) != EOF) {
+    switch (opt) {
+    case 'r':
+      rad = strtol(optarg, &end, 10);
+      break;
+    case 'l':
+      rest_len = strtol(optarg, &end, 10);
+      break;
+    default:
+      std::cout << "Given optargs not valid" << std::endl;
+      break;
+    }
   }
 
   std::vector<std::vector<Pt3>> pts;
@@ -332,7 +330,7 @@ int main(int argc, char* argv[])
   get_adj_list(rest_len, pts, pt_idxs, adj_list);
   get_rd_only_idxs(block_threads, pts, adj_list, rd_only_idxs);
   get_nbors_bufs(block_threads, pts, adj_list, rd_only_idxs, nbors_bufs);
-  write_to_file(pts, rd_only_idxs, nbors_bufs, file);
+  write_to_file(rad, rest_len, pts, rd_only_idxs, nbors_bufs, file);
   print_sphere_stats(pts, adj_list, rd_only_idxs, nbors_bufs);
   return 0;
 }

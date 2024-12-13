@@ -13,7 +13,7 @@ Camera::Camera(glm::vec3 position, float pitch, float yaw, float fov)
 
 glm::mat4 Camera::GetProjectionMatrix(float width, float height)
 {
-    return glm::perspective(glm::radians(fov),width/height,0.1f,100.0f);
+    return glm::perspective(glm::radians(fov),width/height,0.1f,2000.0f);
 }
 
 void Camera::UpdateDirectionVectors()
