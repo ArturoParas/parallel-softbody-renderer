@@ -63,6 +63,8 @@ int main()
     std::string input_file_name = "../inputs/sphere.txt";
     std::fstream input_file(input_file_name, std::ios_base::in);
 
+    float circle_radius;
+    float spring_rest_length;
     uint32_t num_blocks;
 
     input_file >> num_blocks;
@@ -165,6 +167,9 @@ int main()
     //Solver
 
     softbody_sim::SolverInfo solver_info;
+    solver_info.num_blocks = num_blocks;
+    solver_info.circle_radius = circle_radius;
+    solver_info.spring_rest_length = spring_rest_length;
 
 
     //Environment
@@ -205,7 +210,7 @@ int main()
             continue;
         }
 
-        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(2.5f),i);
+        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(solver_info.circle_radius),i);
     }
 
     //Camera

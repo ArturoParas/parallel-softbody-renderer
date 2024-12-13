@@ -277,7 +277,11 @@ __global__ void solver_cuda(float* device_curr_circles, float* device_prev_circl
 
     for(uint32_t i = 0; i < intermediate_steps; i++){
 
-        // update_circle_position_cuda_precise(shared_curr_circles, shared_prev_circles, nbors_buf, ); //TODOOO
+        update_circle_position_cuda_precise(shared_curr_circles, shared_prev_circles, nbors_buf, 
+                                            width, depth, height, 
+                                            circle_radius, circle_mass, 
+                                            k_constant, spring_length, 
+                                            damping_constant, intermediate_steps, dt2 );
         __syncthreads();
     }
 
@@ -299,12 +303,12 @@ void solver_update(float* host_curr_circles, float* device_curr_circles, float* 
     
 
     solver_cuda<<<solver_info.num_blocks, THREADS_PER_BLOCK>>>(device_curr_circles, device_prev_circles,
-                                                                           device_neighbor_indices, device_neighbor_map,
-                                                                           solver_info.width, solver_info.depth, solver_info.height,
-                                                                           solver_info.circle_radius, solver_info.circle_mass,
-                                                                           solver_info.k_constant, solver_info.spring_rest_length,
-                                                                           solver_info.damping_constant, solver_info.gravity_force, 
-                                                                           solver_info.intermediate_steps, solver_info.dt2_intermediate);
+                                                               device_neighbor_indices, device_neighbor_map,
+                                                               solver_info.width, solver_info.depth, solver_info.height,
+                                                               solver_info.circle_radius, solver_info.circle_mass,
+                                                               solver_info.k_constant, solver_info.spring_rest_length,
+                                                               solver_info.damping_constant, solver_info.gravity_force, 
+                                                               solver_info.intermediate_steps, solver_info.dt2_intermediate);
 
     cudaMemcpy(host_curr_circles, device_curr_circles, 3*solver_info.num_blocks*THREADS_PER_BLOCK,cudaMemcpyDeviceToHost);
 
