@@ -36,7 +36,7 @@
 #define THREADS_PER_BLOCK 16
 
 void solver_update(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
-
+void solver_update_device(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
 
 //I will move this method later
 std::string ReadTextFile(const std::string & filename){
@@ -282,8 +282,8 @@ int main()
             window.setMouseCursorVisible(true);
         }
 
-        solver_update(host_curr_circles,device_curr_circles,device_prev_circles,
-                      device_neighbor_indices,device_neighbor_map,solver_info);
+        solver_update_device(host_curr_circles,device_curr_circles,device_prev_circles,
+                             device_neighbor_indices,device_neighbor_map,solver_info);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
