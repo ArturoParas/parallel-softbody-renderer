@@ -9,85 +9,42 @@
 namespace softbody_sim
 {
 
-  
-
 struct SolverInfo{
 
-  int width;
-  int height;
-  int num_rows;
-  int num_cols;
+  float width; //x
+  float depth; //y
+  float height; //z
 
-  int num_circles;
   float circle_radius;
+  float circle_mass;
 
-  int num_springs;
   float k_constant;
+  float spring_rest_length;
 
+  float damping_constant;
+  float gravity_force;
 
-  int intermediate_steps;
-  float dt;
-  float dt_intermediate;
+  uint32_t intermediate_steps;
   float dt2_intermediate;
 
+  uint32_t num_blocks;
+  uint32_t threads_per_block;
 
+  SolverInfo(uint32_t _width=100, uint32_t _depth=100, uint32_t _height=100, 
+             float _circle_radius=2.5, float _circle_mass = 1.f,float _k_constant=2.f, float _spring_rest_length=10.f,
+             float _damping_constant=2.f, float _gravity_force=-0.98f,
+             uint32_t _intermediate_steps=8, float _dt=0.1f, 
+             uint32_t _num_blocks=1, uint32_t _threads_per_block=320) 
 
-
-
-  SolverInfo(int _width, int _height, int _num_circles,float _circle_radius, int _num_springs, float _k_constant,  int _intermediate_steps=8, float _dt=0.1f) 
-    : width(_width), height(_height), 
-      num_rows(ceil(height / 2 * _circle_radius) + 2), num_cols(ceil(width / 2 * _circle_radius) + 2),
-      num_circles(_num_circles), circle_radius(_circle_radius), num_springs(_num_springs), k_constant(_k_constant),
-      intermediate_steps(_intermediate_steps), dt(_dt), 
-      dt_intermediate(_dt/_intermediate_steps), dt2_intermediate(dt_intermediate*dt_intermediate) {}
+    : width(_width), depth(_depth), height(_height), 
+      circle_radius(_circle_radius), circle_mass(_circle_mass), k_constant(_k_constant), spring_rest_length(_spring_rest_length), 
+      damping_constant(_damping_constant), gravity_force(_gravity_force),
+      intermediate_steps(_intermediate_steps), dt2_intermediate((_dt*_dt)/(_intermediate_steps*_intermediate_steps)), 
+      num_blocks(_num_blocks), threads_per_block(_threads_per_block) {}
 
 
 };
 
-
-
-
-class Solver
-{
-public:
-  Solver(const int width, const int height, std::vector<Circle>& circles,
-    const int intermediate_steps=8, const float dt=0.1);
-
-  void insert_circle(Circle& circle);
-
-  void transition_grid();
-
-  void move_circles();
-
-  void resolve_cell(const int row, const int col);
-
-  void resolve_collisions();
-
-  void apply_border();
-
-  void transition_circles();
-
-  void update();
-
-  void print_grid();
-
-  void print_next_grid();
-
-  float get_dt() const;
-
-private:
-  int width_;
-  int height_;
-  int num_cols_;
-  int num_rows_;
-  std::vector<std::vector<std::vector<Circle>>> grid_;
-  std::vector<std::vector<std::vector<Circle>>> next_grid_;
-  int intermediate_steps_;
-  float dt_;
-  float dt_intermediate_;
-  float dt2_intermediate_;
-};
-
-} // namespace softbody_sim
+} 
 
 #endif // SOLVER_HPP

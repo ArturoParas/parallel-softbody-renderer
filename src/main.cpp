@@ -23,23 +23,18 @@
 #include <vec2.hpp>
 #include <solver.hpp>
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 800
-
 #define MOVE_SPEED 5.f
 #define MOUSE_SENSITIVITY 4.f
 
-#define NUM_CIRCLES 2
-#define CIRCLE_ENTRY_SIZE 6
+#define MAX_RDONLY_NEIGHBORS 380
+#define MAX_NEIGHBORS_PER_CIRCLE 26
 
-#define NUM_SPRINGS 1
-#define SPRING_ENTRY_SIZE 3
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 800
 
-#define DT 0.1
 
-void solver_update(const softbody_sim::SolverInfo & solver_info, void* circles, void* springs);
-// void initialize_springs(const softbody_sim::SolverInfo & solver_info, uint16_t *springs_host, uint16_t *springs_device);
-// void host_test_spring_buffer(uint16_t *springs_device);
+void solver_update(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
+
 
 //I will move this method later
 std::string ReadTextFile(const std::string & filename){
@@ -60,6 +55,115 @@ std::string ReadTextFile(const std::string & filename){
 
 int main()
 {
+
+    //Read Input
+
+    std::string input_file_name = "../inputs/sphere.txt";
+    std::fstream input_file(input_file_name, std::ios_base::in);
+
+    uint32_t num_blocks;
+
+    input_file >> num_blocks;
+
+    float* host_curr_circles = (float*)malloc(3*num_blocks*threads_per_block*sizeof(float));
+    uint8_t* active_circles = (uint8_t*)malloc(num_blocks*threads_per_block*sizeof(uint8_t));
+    uint16_t* host_neighbor_indices = (uint16_t*)malloc(num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t));
+    uint16_t* host_neighbor_map = (uint16_t*)malloc(num_blocks*threads_per_block*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
+
+    uint32_t circles_in_block;
+    float circ_x,circ_y,circ_z;
+    uint32_t idx_cc= 0;
+    uint32_t idx_ac= 0;
+    for(uint32_t b=0; b < num_blocks; b++){
+
+        input_file >> circles_in_block;
+
+        for(uint32_t i=0; i < circles_in_block;i++){
+
+            input_file >> circ_x;
+            input_file >> circ_y;
+            input_file >> circ_z;
+
+            host_curr_circles[idx_cc+0] = circ_x;
+            host_curr_circles[idx_cc+1] = circ_y;
+            host_curr_circles[idx_cc+2] = circ_z;
+            idx_cc+=3;
+
+            active_circles[idx_ac] = 1;
+            idx_ac++;
+        }
+        for(uint32_t i=0; i < threads_per_block - circles_in_block; i++){
+
+            host_curr_circles[idx_cc+0] = 0.f;
+            host_curr_circles[idx_cc+1] = 0.f;
+            host_curr_circles[idx_cc+2] = 0.f;
+            idx_cc+=3;
+
+            active_circles[idx_ac] = 0;
+            idx_ac++;
+        }
+
+    }
+
+    uint32_t idx_hni=0;
+    uint32_t rdonly_circs;
+    uint16_t neighbor;
+    for(uint32_t b = 0; b < num_blocks; b++){
+
+        input_file >> rdonly_circs; 
+
+        for(uint32_t i=0; i < rdonly_circs; i++){
+
+            input_file >> neighbor;
+
+            host_neighbor_indices[idx_hni] = neighbor;
+            idx_hni++;
+        }
+
+        for(uint32_t i=0; i < MAX_RDONLY_NEIGHBORS - rdonly_circs; i++){
+
+            host_neighbor_indices[idx_hni] = 0;
+            idx_hni++;
+        }
+    }
+
+    uint32_t idx_hnm=0;
+    uint32_t mapped_to;
+    for(uint32_t b=0; b < num_blocks; b++){
+
+        for(uint32_t i=0; i < MAX_NEIGHBORS_PER_CIRCLE*threads_per_block; i++){
+
+            input_file >> mapped_to;
+
+            host_neighbor_map[idx_hnm] = mapped_to;
+            idx_hnm++;
+        }
+    }
+
+
+    float* device_curr_circles;
+    float* device_prev_circles;
+    uint16_t* device_neighbor_indices;
+    uint16_t* device_neighbor_map;
+
+    cudaMalloc(&device_curr_circles, 3*num_blocks*threads_per_block*sizeof(float));
+    cudaMalloc(&device_prev_circles, 3*num_blocks*threads_per_block*sizeof(float));
+    cudaMalloc(&device_neighbor_indices, num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t));
+    cudaMalloc(&device_neighbor_map, num_blocks*threads_per_block*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
+
+    cudaMemcpy(device_curr_circles, host_curr_circles,  3*num_blocks*threads_per_block*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_prev_circles, host_curr_circles,  3*num_blocks*threads_per_block*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_neighbor_indices, host_neighbor_indices,  num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_neighbor_map, host_neighbor_map,  num_blocks*threads_per_block*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t), cudaMemcpyHostToDevice);
+    
+    free(host_neighbor_indices);
+    free(host_neighbor_map);
+
+
+    //Solver
+
+    softbody_sim::SolverInfo solver_info;
+
 
     //Environment
     sf::ContextSettings contextsettings;
@@ -93,37 +197,14 @@ int main()
 
     std::vector<Object> objects;
 
-    for(int i = 0; i < NUM_CIRCLES; i++){
-        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(2.5f));
+    for(int i = 0; i < num_blocks * threads_per_block; i++){
+
+        if(active_circles[i] == 0){
+            continue;
+        }
+
+        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(2.5f),i);
     }
-
-    //Solver
-    softbody_sim::SolverInfo solver(100,100,NUM_CIRCLES,NUM_SPRINGS,2.5f,2.f,1,DT);
-    
-    //Circles
-    float* circles = (float*)malloc(sizeof(float) * NUM_CIRCLES * CIRCLE_ENTRY_SIZE);
-
-    for(int i = 0; i < NUM_CIRCLES; i++){
-
-        circles[CIRCLE_ENTRY_SIZE*i+0] = (i+1) * 16.f;
-        circles[CIRCLE_ENTRY_SIZE*i+1] = 10.f;
-        circles[CIRCLE_ENTRY_SIZE*i+2] = (i+1) * 16.f;
-        circles[CIRCLE_ENTRY_SIZE*i+3] = 10.f;
-        circles[CIRCLE_ENTRY_SIZE*i+4] = (i+1) * 16.f;
-        circles[CIRCLE_ENTRY_SIZE*i+5] = 10.f;
-    }
-
-
-    
-
-    //Springs
-
-    uint16_t* springs = (uint16_t*)malloc(sizeof(uint16_t) * NUM_SPRINGS * SPRING_ENTRY_SIZE);
-
-    //for now
-    springs[CIRCLE_ENTRY_SIZE*0+0] = 0; //endpoint A
-    springs[CIRCLE_ENTRY_SIZE*0+1] = 1; //endpoint B
-    springs[CIRCLE_ENTRY_SIZE*0+2] = 12; //Resting Length
 
     //Camera
     Camera camera(glm::vec3(10.f,0.f,70.f));
@@ -194,10 +275,8 @@ int main()
             window.setMouseCursorVisible(true);
         }
 
-        
-
-        solver_update(solver, (void*)circles, (void*)springs);
-
+        solver_update(host_curr_circles,device_curr_circles,device_prev_circles,
+                      device_neighbor_indices,device_neighbor_map,solver_info);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -207,12 +286,12 @@ int main()
         shader.SetVec3Param("lightPos",camera.position);
 
         
-        for(int i = 0 ; i < NUM_CIRCLES; i++){
+        for(uint32_t i = 0 ; i < objects.size(); i++){
 
-            Object obj = objects[i];
-            obj.position.x = circles[CIRCLE_ENTRY_SIZE*i + 2];
-            obj.position.z = circles[CIRCLE_ENTRY_SIZE*i + 3];
-
+            Object& obj = objects[i];
+            obj.position.x = host_curr_circles[3*obj.tag+0];
+            obj.position.y = host_curr_circles[3*obj.tag+1];
+            obj.position.z = host_curr_circles[3*obj.tag+2];
             
             // std::cout << i << ": "<<   obj.position.x<<" "<<  obj.position.z<< std::endl;
 
@@ -224,8 +303,8 @@ int main()
 
     }
 
-    free(circles);
-    // freeSprings(springs);
+    free(host_curr_circles);
+    free(active_circles);
 
     return 0;
 }
