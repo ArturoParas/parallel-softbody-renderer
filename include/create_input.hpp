@@ -41,7 +41,7 @@ void get_nbors_bufs(
   std::vector<std::vector<int>>& nbors_bufs);
 
 void write_to_file(
-  const int rad, const int rest_len, const std::vector<std::vector<Pt3>>& pts,
+  const int rest_len, const std::vector<std::vector<Pt3>>& pts,
   const std::vector<std::vector<int>>& rd_only_idxs,
   const std::vector<std::vector<int>>& nbors_bufs, const std::string file);
 

@@ -63,10 +63,10 @@ int main()
     std::string input_file_name = "../inputs/sphere.txt";
     std::fstream input_file(input_file_name, std::ios_base::in);
 
-    float circle_radius;
     float spring_rest_length;
     uint32_t num_blocks;
 
+    input_file >> spring_rest_length;
     input_file >> num_blocks;
 
     float* host_curr_circles = (float*)malloc(3*num_blocks*THREADS_PER_BLOCK*sizeof(float));
@@ -168,7 +168,6 @@ int main()
 
     softbody_sim::SolverInfo solver_info;
     solver_info.num_blocks = num_blocks;
-    solver_info.circle_radius = circle_radius;
     solver_info.spring_rest_length = spring_rest_length;
 
 

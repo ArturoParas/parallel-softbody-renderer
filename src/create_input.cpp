@@ -161,14 +161,14 @@ void get_nbors_bufs(
 }
 
 void write_to_file(
-  const int rad, const int rest_len, const std::vector<std::vector<Pt3>>& pts,
+  const int rest_len, const std::vector<std::vector<Pt3>>& pts,
   const std::vector<std::vector<int>>& rd_only_idxs,
   const std::vector<std::vector<int>>& nbors_bufs, const std::string file)
 {
   std::ofstream of("../inputs/" + file);
 
   // Sphere:
-  of << rad << " " << rest_len << "\n";
+  of << rest_len << "\n";
 
   // Points!
   // [num blocks]
@@ -330,7 +330,7 @@ int main(int argc, char* argv[])
   get_adj_list(rest_len, pts, pt_idxs, adj_list);
   get_rd_only_idxs(block_threads, pts, adj_list, rd_only_idxs);
   get_nbors_bufs(block_threads, pts, adj_list, rd_only_idxs, nbors_bufs);
-  write_to_file(rad, rest_len, pts, rd_only_idxs, nbors_bufs, file);
+  write_to_file(rest_len, pts, rd_only_idxs, nbors_bufs, file);
   print_sphere_stats(pts, adj_list, rd_only_idxs, nbors_bufs);
   return 0;
 }
