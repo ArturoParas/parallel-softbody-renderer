@@ -24,7 +24,7 @@
 #include <solver.hpp>
 #include <cuda_runtime.h>
 
-#define MOVE_SPEED 5.f
+#define MOVE_SPEED 50.f
 #define MOUSE_SENSITIVITY 4.f
 
 #define MAX_RDONLY_NEIGHBORS 380
@@ -205,7 +205,7 @@ int main()
             continue;
         }
 
-        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(2.5f),i);
+        objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(solver_info.circle_radius),i);
     }
 
     //Camera
@@ -301,7 +301,7 @@ int main()
         }
 
         window.display();
-        std::this_thread::sleep_for(std::chrono::milliseconds((int)(50)));
+        std::this_thread::sleep_for(std::chrono::milliseconds((int)(15)));
 
     }
 

@@ -305,9 +305,7 @@ void solver_update(float* host_curr_circles, float* device_curr_circles, float* 
                                                                            solver_info.k_constant, solver_info.spring_rest_length,
                                                                            solver_info.damping_constant, solver_info.gravity_force, 
                                                                            solver_info.intermediate_steps, solver_info.dt2_intermediate);
-
+    cudaCheckError(cudaDeviceSynchronize());
     cudaMemcpy(host_curr_circles, device_curr_circles, 3*solver_info.num_blocks*THREADS_PER_BLOCK,cudaMemcpyDeviceToHost);
 
 }
-
-
