@@ -9,7 +9,9 @@ class Object
 {
     public:
 
+        Object(const Model* model,glm::vec3 position = {},glm::vec3 rotation = {},glm::vec3 scale = glm::vec3(1.f), uint32_t tag=0);
         Object(const Model* model,glm::vec3 position = {},glm::vec3 rotation = {},glm::vec3 scale = glm::vec3(1.f));
+
 
         glm::mat4 GetTransformationMatrix();
 
@@ -17,6 +19,7 @@ class Object
 
         void Draw(Shader & shader,glm::vec3 color);
 
+        uint32_t tag;
         const Model* model;
         glm::vec3 position,rotation,scale;
 
