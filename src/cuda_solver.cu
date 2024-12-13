@@ -280,7 +280,7 @@ __global__ void solver_cuda(float* device_curr_circles, float* device_prev_circl
         update_circle_position_cuda_precise(shared_curr_circles, shared_prev_circles, nbors_buf, 
                                             width, depth, height, 
                                             circle_radius, circle_mass, 
-                                            k_constant, spring_length, 
+                                            k_constant, spring_rest_length, 
                                             damping_constant, intermediate_steps, dt2 );
         __syncthreads();
     }
