@@ -22,6 +22,7 @@
 #include <circle.hpp>
 #include <vec2.hpp>
 #include <solver.hpp>
+#include <cuda_runtime.h>
 
 #define MOVE_SPEED 5.f
 #define MOUSE_SENSITIVITY 4.f
@@ -32,6 +33,7 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
+#define THREADS_PER_BLOCK 320
 
 void solver_update(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
 
@@ -65,10 +67,10 @@ int main()
 
     input_file >> num_blocks;
 
-    float* host_curr_circles = (float*)malloc(3*num_blocks*threads_per_block*sizeof(float));
-    uint8_t* active_circles = (uint8_t*)malloc(num_blocks*threads_per_block*sizeof(uint8_t));
+    float* host_curr_circles = (float*)malloc(3*num_blocks*THREADS_PER_BLOCK*sizeof(float));
+    uint8_t* active_circles = (uint8_t*)malloc(num_blocks*THREADS_PER_BLOCK*sizeof(uint8_t));
     uint16_t* host_neighbor_indices = (uint16_t*)malloc(num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t));
-    uint16_t* host_neighbor_map = (uint16_t*)malloc(num_blocks*threads_per_block*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
+    uint16_t* host_neighbor_map = (uint16_t*)malloc(num_blocks*THREADS_PER_BLOCK*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
 
     uint32_t circles_in_block;
     float circ_x,circ_y,circ_z;
@@ -92,7 +94,7 @@ int main()
             active_circles[idx_ac] = 1;
             idx_ac++;
         }
-        for(uint32_t i=0; i < threads_per_block - circles_in_block; i++){
+        for(uint32_t i=0; i < THREADS_PER_BLOCK - circles_in_block; i++){
 
             host_curr_circles[idx_cc+0] = 0.f;
             host_curr_circles[idx_cc+1] = 0.f;
@@ -131,7 +133,7 @@ int main()
     uint32_t mapped_to;
     for(uint32_t b=0; b < num_blocks; b++){
 
-        for(uint32_t i=0; i < MAX_NEIGHBORS_PER_CIRCLE*threads_per_block; i++){
+        for(uint32_t i=0; i < MAX_NEIGHBORS_PER_CIRCLE*THREADS_PER_BLOCK; i++){
 
             input_file >> mapped_to;
 
@@ -146,15 +148,15 @@ int main()
     uint16_t* device_neighbor_indices;
     uint16_t* device_neighbor_map;
 
-    cudaMalloc(&device_curr_circles, 3*num_blocks*threads_per_block*sizeof(float));
-    cudaMalloc(&device_prev_circles, 3*num_blocks*threads_per_block*sizeof(float));
+    cudaMalloc(&device_curr_circles, 3*num_blocks*THREADS_PER_BLOCK*sizeof(float));
+    cudaMalloc(&device_prev_circles, 3*num_blocks*THREADS_PER_BLOCK*sizeof(float));
     cudaMalloc(&device_neighbor_indices, num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t));
-    cudaMalloc(&device_neighbor_map, num_blocks*threads_per_block*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
+    cudaMalloc(&device_neighbor_map, num_blocks*THREADS_PER_BLOCK*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
 
-    cudaMemcpy(device_curr_circles, host_curr_circles,  3*num_blocks*threads_per_block*sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_prev_circles, host_curr_circles,  3*num_blocks*threads_per_block*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_curr_circles, host_curr_circles,  3*num_blocks*THREADS_PER_BLOCK*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_prev_circles, host_curr_circles,  3*num_blocks*THREADS_PER_BLOCK*sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_neighbor_indices, host_neighbor_indices,  num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_neighbor_map, host_neighbor_map,  num_blocks*threads_per_block*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_neighbor_map, host_neighbor_map,  num_blocks*THREADS_PER_BLOCK*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t), cudaMemcpyHostToDevice);
     
     free(host_neighbor_indices);
     free(host_neighbor_map);
@@ -197,7 +199,7 @@ int main()
 
     std::vector<Object> objects;
 
-    for(int i = 0; i < num_blocks * threads_per_block; i++){
+    for(int i = 0; i < num_blocks * THREADS_PER_BLOCK; i++){
 
         if(active_circles[i] == 0){
             continue;
