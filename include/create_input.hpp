@@ -23,17 +23,25 @@ struct std::hash<Pt3>
 
 std::vector<int> block_threads_to_dims(const int block_threads, const int rest_len);
 
-void get_sphere_pts(
+int get_pts(
   const int block_threads, const int rad, const Pt3& center, const int rest_len,
-  std::vector<std::vector<Pt3>>& pts, std::unordered_map<Pt3, int>& pt_idxs);
+  std::vector<std::vector<Pt3>>& pts);
 
-void get_adjacency_list(
-  const int rest_len, const std::vector<Pt3>& pts, const std::unordered_map<Pt3, int>& pt_idxs,
-  std::vector<std::vector<int>>& adj_list);
+void reget_pts(
+  const int num_blocks, const int max_pts, const std::vector<std::vector<Pt3>>& pts,
+  std::vector<Pt3>& new_pts, std::unordered_map<Pt3, int>& map, std::vector<bool>& indicator);
 
-void get_rd_only_idxs(
-  const int block_threads, const std::vector<std::vector<Pt3>>& pts,
-  const std::vector<std::vector<int>>& adj_list, std::vector<std::vector<int>>& rd_only_idxs);
+int get_adj_list(
+  const int rest_len, const std::vector<Pt3>& pts, const std::unordered_map<Pt3, int>& idx_map,
+  const std::vector<bool>& indicators, std::vector<std::vector<int>>& adj_list);
+
+int get_rdonly_map(
+  const int num_blocks, const int threads_per_block, const std::vector<std::vector<int>>& adj_list,
+  std::vector<std::vector<int>>& rdonly_map);
+
+void reget_rdonly_map(
+  const int num_blocks, const int max_rdonly_per_block,
+  const std::vector<std::vector<int>>& rdonly_map, std::vector<int>& new_rdonly_map);
 
 void get_nbors_bufs(
   const int block_threads, const std::vector<std::vector<Pt3>>& pts,
@@ -41,9 +49,11 @@ void get_nbors_bufs(
   std::vector<std::vector<int>>& nbors_bufs);
 
 void write_to_file(
-  const int rest_len, const std::vector<std::vector<Pt3>>& pts,
-  const std::vector<std::vector<int>>& rd_only_idxs,
-  const std::vector<std::vector<int>>& nbors_bufs, const std::string file);
+  const int rest_len, const int threads_per_block, const int num_blocks, const int max_pts,
+  const int max_nbors_per_pt, const int max_nbors_per_block, const int max_nbors,
+  const int max_rdonly_per_block, const int max_rdonly, const std::vector<Pt3>& pts,
+  const std::vector<bool>& indicators, const std::vector<int>& rdonly_map,
+  const std::vector<int>& nbors_map, const std::string file);
 
 void print_sphere_stats(
   const std::vector<std::vector<Pt3>>& pts, const std::vector<std::vector<int>>& adj_list,

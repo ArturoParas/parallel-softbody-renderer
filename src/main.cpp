@@ -27,16 +27,35 @@
 #define MOVE_SPEED 50.f
 #define MOUSE_SENSITIVITY 4.f
 
-#define MAX_RDONLY_NEIGHBORS 380
-#define MAX_NEIGHBORS_PER_CIRCLE 26
+#define MAX_RDONLY_NEIGHBORS 3
+#define MAX_NEIGHBORS_PER_CIRCLE 3
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-#define THREADS_PER_BLOCK 16
+#define THREADS_PER_BLOCK 4
+#define NUM_BLOCKS 2
 
-void solver_update(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
-void solver_update_device(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
+#define DEBUG
+#ifdef DEBUG
+#define cudaCheckError(ans)  cudaAssert((ans), __FILE__, __LINE__);
+inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+if (code != cudaSuccess)
+   {
+      fprintf(stderr, "CUDA Error: %s at %s:%d\n",
+        cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+#else
+#define cudaCheckError(ans) ans
+#endif
+
+// void solver_update(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
+// void solver_update_device(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, softbody_sim::SolverInfo & solver_info);
+void solver_setup(const softbody_sim::SolverInfo& solver_info);
+void solver_trivial(float* h_curr_circles);
 
 //I will move this method later
 std::string ReadTextFile(const std::string & filename){
@@ -63,114 +82,76 @@ int main()
     std::string input_file_name = "../inputs/sphere.txt";
     std::fstream input_file(input_file_name, std::ios_base::in);
 
-    float spring_rest_length;
-    uint32_t num_blocks;
+    int rest_len;
+    int threads_per_block;
+    int num_blocks;
+    int max_pts;
+    int max_nbors_per_pt;
+    int max_nbors_per_block;
+    int max_nbors;
+    int max_rdonly_per_block;
+    int max_rdonly;
 
-    input_file >> spring_rest_length;
+    input_file >> rest_len;
+    input_file >> threads_per_block;
     input_file >> num_blocks;
+    input_file >> max_pts;
+    input_file >> max_nbors_per_pt;
+    input_file >> max_nbors_per_block;
+    input_file >> max_nbors;
+    input_file >> max_rdonly_per_block;
+    input_file >> max_rdonly;
 
-    float* host_curr_circles = (float*)malloc(3*num_blocks*THREADS_PER_BLOCK*sizeof(float));
-    uint8_t* active_circles = (uint8_t*)malloc(num_blocks*THREADS_PER_BLOCK*sizeof(uint8_t));
-    uint16_t* host_neighbor_indices = (uint16_t*)malloc(num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t));
-    uint16_t* host_neighbor_map = (uint16_t*)malloc(num_blocks*THREADS_PER_BLOCK*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
+    float* host_curr_pts = (float*)malloc(3 * max_pts * sizeof(float));
+    uint8_t* pt_indicators = (uint8_t*)malloc(max_pts * sizeof(uint8_t));
+    uint16_t* host_rdonly_nbors = (uint16_t*)malloc(max_rdonly * sizeof(uint16_t));
+    uint16_t* host_nbor_map = (uint16_t*)malloc(max_nbors * sizeof(uint16_t));
 
-    uint32_t circles_in_block;
-    float circ_x,circ_y,circ_z;
-    uint32_t idx_cc= 0;
-    uint32_t idx_ac= 0;
-    for(uint32_t b=0; b < num_blocks; b++){
-
-        input_file >> circles_in_block;
-
-        for(uint32_t i=0; i < circles_in_block;i++){
-
-            input_file >> circ_x;
-            input_file >> circ_y;
-            input_file >> circ_z;
-
-            host_curr_circles[idx_cc+0] = circ_x;
-            host_curr_circles[idx_cc+1] = circ_y;
-            host_curr_circles[idx_cc+2] = circ_z;
-            idx_cc+=3;
-
-            active_circles[idx_ac] = 1;
-            idx_ac++;
-        }
-        for(uint32_t i=0; i < THREADS_PER_BLOCK - circles_in_block; i++){
-
-            host_curr_circles[idx_cc+0] = 0.f;
-            host_curr_circles[idx_cc+1] = 0.f;
-            host_curr_circles[idx_cc+2] = 0.f;
-            idx_cc+=3;
-
-            active_circles[idx_ac] = 0;
-            idx_ac++;
-        }
-
+    for (int pt_idx = 0; pt_idx < max_pts; pt_idx += 3) {
+      input_file >> host_curr_pts[pt_idx + 0];
+      input_file >> host_curr_pts[pt_idx + 1];
+      input_file >> host_curr_pts[pt_idx + 2];
+    }
+    for (int pt_idx = 0; pt_idx < max_pts; pt_idx++) {
+      input_file >> pt_indicators[pt_idx];
+    }
+    for (int rdonly_idx; rdonly_idx < max_rdonly; rdonly_idx++) {
+      input_file >> host_rdonly_nbors[rdonly_idx];
+    }
+    for (int nbor_idx; nbor_idx < max_nbors; nbor_idx++) {
+      input_file >> host_nbor_map[nbor_idx];
     }
 
-    uint32_t idx_hni=0;
-    uint32_t rdonly_circs;
-    uint16_t neighbor;
-    for(uint32_t b = 0; b < num_blocks; b++){
+    float3* device_curr_pts;
+    float3* device_prev_pts;
+    uint16_t* device_rdonly_nbors;
+    uint16_t* device_nbor_map;
 
-        input_file >> rdonly_circs; 
-
-        for(uint32_t i=0; i < rdonly_circs; i++){
-
-            input_file >> neighbor;
-
-            host_neighbor_indices[idx_hni] = neighbor;
-            idx_hni++;
-        }
-
-        for(uint32_t i=0; i < MAX_RDONLY_NEIGHBORS - rdonly_circs; i++){
-
-            host_neighbor_indices[idx_hni] = 0;
-            idx_hni++;
-        }
-    }
-
-    uint32_t idx_hnm=0;
-    uint32_t mapped_to;
-    for(uint32_t b=0; b < num_blocks; b++){
-
-        for(uint32_t i=0; i < MAX_NEIGHBORS_PER_CIRCLE*THREADS_PER_BLOCK; i++){
-
-            input_file >> mapped_to;
-
-            host_neighbor_map[idx_hnm] = mapped_to;
-            idx_hnm++;
-        }
-    }
-
-
-    float* device_curr_circles;
-    float* device_prev_circles;
-    uint16_t* device_neighbor_indices;
-    uint16_t* device_neighbor_map;
-
-    cudaMalloc(&device_curr_circles, 3*num_blocks*THREADS_PER_BLOCK*sizeof(float));
-    cudaMalloc(&device_prev_circles, 3*num_blocks*THREADS_PER_BLOCK*sizeof(float));
-    cudaMalloc(&device_neighbor_indices, num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t));
-    cudaMalloc(&device_neighbor_map, num_blocks*THREADS_PER_BLOCK*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t));
-
-    cudaMemcpy(device_curr_circles, host_curr_circles,  3*num_blocks*THREADS_PER_BLOCK*sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_prev_circles, host_curr_circles,  3*num_blocks*THREADS_PER_BLOCK*sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_neighbor_indices, host_neighbor_indices,  num_blocks*MAX_RDONLY_NEIGHBORS*sizeof(uint16_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_neighbor_map, host_neighbor_map,  num_blocks*THREADS_PER_BLOCK*MAX_NEIGHBORS_PER_CIRCLE*sizeof(uint16_t), cudaMemcpyHostToDevice);
+    cudaCheckError(cudaMalloc(&device_curr_pts, max_pts * sizeof(float3)));
+    cudaCheckError(cudaMalloc(&device_prev_pts, max_pts * sizeof(float3)));
+    cudaCheckError(cudaMalloc(&device_rdonly_nbors, max_rdonly * sizeof(uint16_t)));
+    cudaCheckError(cudaMalloc(&device_nbor_map, max_nbors * sizeof(uint16_t)));
     
-    free(host_neighbor_indices);
-    free(host_neighbor_map);
+    cudaCheckError(cudaMemcpy(device_curr_pts, host_curr_pts, max_pts * sizeof(float3),cudaMemcpyHostToDevice));
+    cudaCheckError(cudaMemcpy(device_prev_pts, host_curr_pts, max_pts * sizeof(float3),cudaMemcpyHostToDevice));
+    cudaCheckError(cudaMemcpy(device_rdonly_nbors, host_rdonly_nbors, max_rdonly * sizeof(uint16_t),cudaMemcpyHostToDevice));
+    cudaCheckError(cudaMemcpy(device_nbor_map, host_nbor_map, max_nbors * sizeof(uint16_t),cudaMemcpyHostToDevice));
 
+    free(host_rdonly_nbors);
+    free(host_nbor_map);
 
     //Solver
-
     softbody_sim::SolverInfo solver_info;
+    solver_info.spring_rest_length = rest_len;
     solver_info.num_blocks = num_blocks;
-    solver_info.spring_rest_length = spring_rest_length;
-    std::cout << solver_info.num_blocks << std::endl; 
-
+    solver_info.threads_per_block = threads_per_block;
+    solver_info.max_pts = max_pts;
+    solver_info.max_nbors_per_pt = max_nbors_per_pt;
+    solver_info.max_nbors_per_block = max_nbors_per_block;
+    solver_info.max_nbors = max_nbors;
+    solver_info.max_rdonly_per_block = max_rdonly_per_block;
+    solver_info.max_rdonly = max_rdonly;
+    solver_setup(solver_info);
 
     //Environment
     sf::ContextSettings contextsettings;
@@ -204,20 +185,21 @@ int main()
 
     std::vector<Object> objects;
 
-    for(int i = 0; i < num_blocks * THREADS_PER_BLOCK; i++){
+    for(uint32_t i = 0; i < num_blocks * THREADS_PER_BLOCK; i++){
 
-        if(active_circles[i] == 0){
+        if(pt_indicators[i] == 0){
+            
             continue;
         }
 
         objects.emplace_back(&model,glm::vec3(5.f*i,0.f,0.f),glm::vec3(0.f),glm::vec3(solver_info.circle_radius),i);
+    
     }
 
     //Camera
     Camera camera(glm::vec3(10.f,0.f,70.f));
 
     //Main Loop
-
     bool isFirstMouse = true;
     sf::Vector2i lastMousePos;
     while (window.isOpen())
@@ -282,8 +264,9 @@ int main()
             window.setMouseCursorVisible(true);
         }
 
-        solver_update_device(host_curr_circles,device_curr_circles,device_prev_circles,
-                             device_neighbor_indices,device_neighbor_map,solver_info);
+        // solver_update_device(host_curr_circles,device_curr_circles,device_prev_circles,
+        //                      device_neighbor_indices,device_neighbor_map,solver_info);
+        solver_trivial(host_curr_pts);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -300,8 +283,8 @@ int main()
             obj.position.y = host_curr_circles[3*obj.tag+1];
             obj.position.z = host_curr_circles[3*obj.tag+2];
             
-            // if (i == 0) {
-            //   std::cout << i << ": " << obj.position.x << " " << obj.position.z << std::endl;
+            // if (i != 0) {
+              // std::cout << i << ": " << obj.position.x << " " << obj.position.z << std::endl;
             // }
 
             obj.Draw(shader,glm::vec3(0.4f,0.4f,0.8f));
@@ -313,7 +296,7 @@ int main()
     }
 
     free(host_curr_circles);
-    free(active_circles);
+    free(pt_indicators);
 
     return 0;
 }

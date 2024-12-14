@@ -10,11 +10,24 @@
 
 #include "exclusiveScan.cu_inl"
 
-#define STRESS 500000
+#define NUM_BLOCKS 2
 
-#define NEIGHBORS_PER_CIRCLE 26
-#define MAX_RDONLY_CIRCLES 80
-#define THREADS_PER_BLOCK 16
+#define THREADS_PER_BLOCK 4
+#define MAX_CIRCLES THREADS_PER_BLOCK * NUM_BLOCKS
+
+#define MAX_RDONLY_PER_BLOCK 3
+#define MAX_RDONLY MAX_RDONLY_PER_BLOCK * NUM_BLOCKS
+
+#define MAX_NBORS_PER_CIRCLE 3
+#define MAX_NBORS MAX_NBORS_PER_CIRCLE * MAX_CIRCLES
+
+#define G -0.1
+#define DAMP 0.98
+#define DT 0.1
+#define DT2 DT * DT
+#define K 2.
+#define RL 1
+#define MASS 1
 
 #define min(a,b) (a < b ? a : b)
 #define max(a,b) (a > b ? a : b)
@@ -36,492 +49,107 @@ if (code != cudaSuccess)
 #define cudaCheckError(ans) ans
 #endif
 
-/** TODO: Change gravity_force to gravity_accel */
+__device__ int rest_len;
+__device__ int threads_per_block;
+__device__ int num_blocks;
+__device__ int max_pts;
+__device__ int max_nbors_per_pt;
+__device__ int max_nbors_per_block;
+__device__ int max_nbors;
+__device__ int max_rdonly_per_block;
+__device__ int max_rdonly;
+__device__ float dt2;
+__device__ float g;
+__device__ float k;
 
-__device__ __inline__ void update_circle_position_cuda_imprecise(float* shared_curr_circles, float* shared_prev_circles, uint16_t* nbors_buf, 
-                                                                 float width, float depth, float height, 
-                                                                 float circle_radius, float circle_mass, float k_constant, float spring_rest_length,
-                                                                 float damping_constant, float gravity_force, float dt2){
+__device__ __inline__ void move()
+{
+  int t_idx = threadIdx.x;
+  int b_idx = blockIdx.x;
+  int g_off = b_idx * blockDim.x;
+  int g_idx = g_off + t_idx;
 
-    uint32_t tIdx = threadIdx.x;
+  float3 prev_circle = g_prev_circles[g_idx];
+  float3 curr_circle = g_curr_circles[g_idx];
+  float3 next_circle = g_curr_circles[g_idx];
 
-    //Thread => Circle
+  next_circle.x += (curr_circle.x - prev_circle.x) * DAMP;
+  next_circle.y += (curr_circle.y - prev_circle.y) * DAMP;
+  next_circle.z += (curr_circle.z - prev_circle.z) * DAMP + G * DT2;
 
-    float circ_x = shared_curr_circles[3*tIdx+ 0];
-    float circ_y = shared_curr_circles[3*tIdx+ 1];
-    float circ_z = shared_curr_circles[3*tIdx+ 2];
+  for (int i = 0; i < MAX_NBORS_PER_CIRCLE; i++) {
+    int n_idx = g_nbor_map[(g_off + i) * MAX_NBORS_PER_CIRCLE + t_idx];
+    if (n_idx >= 0) {
+      float3 nbor_circle = g_curr_circles[g_rdonly_nbors[g_off + n_idx]];
 
-    circ_x += (circ_x - shared_prev_circles[3*tIdx+ 0]) * damping_constant;
-    circ_y += (circ_y - shared_prev_circles[3*tIdx+ 1]) * damping_constant;
-    circ_z += (circ_z - shared_prev_circles[3*tIdx+ 2]) * damping_constant + gravity_force*dt2/circle_mass;
+      float dx = nbor_circle.x - curr_circle.x;
+      float dy = nbor_circle.y - curr_circle.y;
+      float dz = nbor_circle.z - curr_circle.z;
 
-    float dist,move_amount,overlap; //For collision resolution
-    float spring_length, dx, dy, dz, x_dir, y_dir, z_dir, signed_force_magnitude; //For spring application
-    for(uint32_t i=0; i < NEIGHBORS_PER_CIRCLE; i++){
+      float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+      if (dist < 1e-16) {
+        printf("TOO CLOSE\n");
+      }
 
-        /*---------- Force Application ---------*/
+      float norm_a = K * (dist - RL) / dist / MASS;
 
-        dx = shared_curr_circles[nbors_buf[tIdx + THREADS_PER_BLOCK*i]+0] - circ_x;
-        dy = shared_curr_circles[nbors_buf[tIdx + THREADS_PER_BLOCK*i]+1] - circ_y;
-        dz = shared_curr_circles[nbors_buf[tIdx + THREADS_PER_BLOCK*i]+2] - circ_z;
-
-        spring_length = sqrtf(dx*dx + dy*dy + dz*dz);
-
-        x_dir = dx / spring_length;
-        y_dir = dy / spring_length;
-        z_dir = dz / spring_length;
-
-        signed_force_magnitude = k_constant * (spring_length - spring_rest_length); 
-
-        circ_x += dt2 * x_dir * signed_force_magnitude / circle_mass;
-        circ_y += dt2 * y_dir * signed_force_magnitude / circle_mass;
-        circ_z += dt2 * z_dir * signed_force_magnitude / circle_mass;
-
-        shared_curr_circles[3*tIdx+ 0] = circ_x;
-        shared_curr_circles[3*tIdx+ 1] = circ_y;
-        shared_curr_circles[3*tIdx+ 2] = circ_z;
-
-        /*--------------------------------------*/
-        //Could insert a syncthreads here
-        /*-------- Collision Resolution --------*/
-
-        dx = shared_curr_circles[nbors_buf[tIdx+ THREADS_PER_BLOCK*i]+0] - circ_x;
-        dy = shared_curr_circles[nbors_buf[tIdx+ THREADS_PER_BLOCK*i]+1] - circ_y;
-        dz = shared_curr_circles[nbors_buf[tIdx+ THREADS_PER_BLOCK*i]+2] - circ_z;
-
-        dist = sqrtf(dx*dx + dy*dy + dz*dz);
-        overlap = dist - 2*circle_radius;
-
-        if(dist-circle_radius < 0){
-
-            move_amount = overlap * 0.5f / dist;
-
-            circ_x += dx * move_amount;
-            circ_y += dy * move_amount;
-            circ_z += dz * move_amount;
-
-        }
-
-        /*--------------------------------------*/
-
-        /*------------ Apply Border ------------*/
-
-        circ_x = min(max(circ_x, circle_radius),width -circle_radius);
-        circ_y = min(max(circ_y, circle_radius),depth -circle_radius);
-        circ_z = min(max(circ_z, circle_radius),height -circle_radius);
-
-        /*--------------------------------------*/
+      next_circle.x += norm_a * dx * DT2;
+      next_circle.y += norm_a * dy * DT2;
+      next_circle.z += norm_a * dz * DT2;
     }
+  }
+  __syncthreads();
 
-    __syncthreads();
-
-    shared_curr_circles[3*tIdx+ 0] = circ_x;
-    shared_curr_circles[3*tIdx+ 1] = circ_y;
-    shared_curr_circles[3*tIdx + 2] = circ_z;
-
-
-
-
+  g_prev_circles[g_idx] = curr_circle;
+  g_curr_circles[g_idx] = next_circle;
 }
 
-__device__ __inline__ void update_circle_position_cuda_precise_device(float* shared_curr_circles, float* device_curr_circles, float* device_prev_circles, uint16_t* device_neighbor_map,
-                                                                      float width, float depth, float height, 
-                                                                      float circle_radius, float circle_mass, float k_constant, float spring_rest_length,
-                                                                      float damping_constant, float gravity_force, float dt2){
-
-    uint32_t tIdx = threadIdx.x;
-    uint32_t bIdx = blockIdx.x;
-
-    if (tIdx < THREADS_PER_BLOCK) {
-
-        /*---------- Force Application ---------*/
-
-        float orig_x =device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx+0];
-        float orig_y =device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx+1];
-        float orig_z =device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx+2];
-
-        float circ_x = orig_x;
-        float circ_y = orig_y;
-        float circ_z = orig_z;
-
-        circ_x += (circ_x - device_prev_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 0]) * damping_constant;
-        circ_y += (circ_y - device_prev_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 1]) * damping_constant;
-        circ_z += (circ_z - device_prev_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 2]) * damping_constant + gravity_force*dt2/circle_mass;
-
-        float spring_length, dx, dy, dz, x_dir, y_dir, z_dir, signed_force_magnitude; 
-        uint16_t nIdx, gIdx;
-        for(uint32_t i=0; i < NEIGHBORS_PER_CIRCLE; i++){
-
-            nIdx = device_neighbor_map[bIdx*THREADS_PER_BLOCK*NEIGHBORS_PER_CIRCLE + (tIdx + THREADS_PER_BLOCK*i)];
-            if(nIdx >= 0){
-
-                dx = shared_curr_circles[3*(nIdx - THREADS_PER_BLOCK)+0] - orig_x;
-                dy = shared_curr_circles[3*(nIdx - THREADS_PER_BLOCK)+1] - orig_y;
-                dz = shared_curr_circles[3*(nIdx - THREADS_PER_BLOCK)+2] - orig_z;
-
-                spring_length = sqrtf(dx*dx + dy*dy + dz*dz);
-
-                x_dir = dx / spring_length;
-                y_dir = dy / spring_length;
-                z_dir = dz / spring_length;
-
-                signed_force_magnitude = k_constant * (spring_length - spring_rest_length); 
-
-                circ_x += dt2 * x_dir * signed_force_magnitude / circle_mass;
-                circ_y += dt2 * y_dir * signed_force_magnitude / circle_mass;
-                circ_z += dt2 * z_dir * signed_force_magnitude / circle_mass;
-            }
-            __syncthreads();
-
-        }
-
-        /*--------------------------------------*/
-
-        __syncthreads();
-
-        device_prev_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 0] = device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 0];
-        device_prev_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 1] = device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 1];
-        device_prev_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 2] = device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 2];
-
-        __syncthreads(); //for good measure
-
-        device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 0] = circ_x;
-        device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 1] = circ_y;
-        device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 2] = circ_z;
-
-        __syncthreads();
-
-        /*-------- Collision Resolution --------*/
-
-        orig_x = circ_x; 
-        orig_y = circ_y; 
-        orig_z = circ_z; 
-
-        float dist,move_amount,overlap;
-        for(uint32_t i=0; i < NEIGHBORS_PER_CIRCLE; i++){
-
-            nIdx = device_neighbor_map[bIdx*THREADS_PER_BLOCK*NEIGHBORS_PER_CIRCLE + (tIdx + THREADS_PER_BLOCK*i)];
-            if(nIdx >= 0){
-
-                dx = shared_curr_circles[3*(nIdx - THREADS_PER_BLOCK)+0] - orig_x;
-                dy = shared_curr_circles[3*(nIdx - THREADS_PER_BLOCK)+1] - orig_y;
-                dz = shared_curr_circles[3*(nIdx - THREADS_PER_BLOCK)+2] - orig_z;
-
-                dist = sqrtf(dx*dx + dy*dy + dz*dz);
-                overlap = dist - 2*circle_radius;
-
-                if(overlap < 0){
-
-                    move_amount = overlap * 0.5f / dist;
-
-                    circ_x += dx * move_amount;
-                    circ_y += dy * move_amount;
-                    circ_z += dz * move_amount;
-
-                }
-
-            }
-
-            __syncthreads();
-        }
-        
-        /*--------------------------------------*/
-        __syncthreads();
-        /*---------- Border Application ---------*/
-
-        device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 0] = min(max(circ_x, -width/2  + circle_radius), width/2  - circle_radius);
-        device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 1] = min(max(circ_y, -depth/2  + circle_radius), depth/2  - circle_radius);
-        device_curr_circles[bIdx*THREADS_PER_BLOCK*3 + 3*tIdx + 2] = min(max(circ_z, -height/2 + circle_radius), height/2 - circle_radius);
-
-    } else {
-        printf("buggin\n");
-    }
-    
-    /*--------------------------------------*/
-    
+__global__ void trivial_kernel()
+{
+  move();
 }
 
+void solver_trivial(float* h_curr_circles)
+{
+  trivial_kernel<<<num_blocks, THREADS_PER_BLOCK>>>();
+  cudaCheckError(cudaDeviceSynchronize());
+  cudaCheckError(cudaMemcpyFromSymbol(h_curr_circles, g_curr_circles, sizeof(float3) * max_pts));
 
-
-
-__device__ __inline__ void update_circle_position_cuda_precise(float* shared_curr_circles, float* shared_prev_circles, uint16_t* nbors_buf,
-                                                               float width, float depth, float height, 
-                                                               float circle_radius, float circle_mass, float k_constant, float spring_rest_length,
-                                                               float damping_constant, float gravity_force, float dt2){
-
-    uint32_t tIdx = threadIdx.x;
-
-    if (tIdx < THREADS_PER_BLOCK) {
-
-        /*---------- Force Application ---------*/
-
-        float orig_x = shared_curr_circles[3*tIdx + 0];
-        float orig_y = shared_curr_circles[3*tIdx + 1];
-        float orig_z = shared_curr_circles[3*tIdx + 2];
-
-        float circ_x = orig_x;
-        float circ_y = orig_y;
-        float circ_z = orig_z;
-
-        circ_x += (circ_x - shared_prev_circles[3*tIdx + 0]) * damping_constant;
-        circ_y += (circ_y - shared_prev_circles[3*tIdx + 1]) * damping_constant;
-        circ_z += (circ_z - shared_prev_circles[3*tIdx + 2]) * damping_constant + gravity_force*dt2/circle_mass;
-
-        float spring_length, dx, dy, dz, x_dir, y_dir, z_dir, signed_force_magnitude; 
-        uint16_t nIdx;
-        for(uint32_t i=0; i < NEIGHBORS_PER_CIRCLE; i++){
-
-            nIdx = nbors_buf[tIdx + THREADS_PER_BLOCK*i];
-            if(nIdx >= 0){
-                dx = shared_curr_circles[3*nIdx+0] - orig_x;
-                dy = shared_curr_circles[3*nIdx+1] - orig_y;
-                dz = shared_curr_circles[3*nIdx+2] - orig_z;
-
-                spring_length = sqrtf(dx*dx + dy*dy + dz*dz);
-
-                x_dir = dx / spring_length;
-                y_dir = dy / spring_length;
-                z_dir = dz / spring_length;
-
-                signed_force_magnitude = k_constant * (spring_length - spring_rest_length); 
-
-                circ_x += dt2 * x_dir * signed_force_magnitude / circle_mass;
-                circ_y += dt2 * y_dir * signed_force_magnitude / circle_mass;
-                circ_z += dt2 * z_dir * signed_force_magnitude / circle_mass;
-            }
-            //mayhaps syncthreads
-
-        }
-
-        /*--------------------------------------*/
-
-        __syncthreads();
-
-        shared_prev_circles[3*tIdx + 0] = shared_curr_circles[3*tIdx + 0];
-        shared_prev_circles[3*tIdx + 1] = shared_curr_circles[3*tIdx + 1];
-        shared_prev_circles[3*tIdx + 2] = shared_curr_circles[3*tIdx + 2];
-
-        shared_curr_circles[3*tIdx + 0] = circ_x;
-        shared_curr_circles[3*tIdx + 1] = circ_y;
-        shared_curr_circles[3*tIdx + 2] = circ_z;
-
-        __syncthreads();
-
-        /*-------- Collision Resolution --------*/
-
-        orig_x = circ_x; 
-        orig_y = circ_y; 
-        orig_z = circ_z; 
-
-        float dist,move_amount,overlap;
-        for(uint32_t i=0; i < NEIGHBORS_PER_CIRCLE; i++){
-
-            nIdx = nbors_buf[tIdx + THREADS_PER_BLOCK*i];
-            if(nIdx >= 0){
-
-                dx = shared_curr_circles[nIdx+0] - orig_x;
-                dy = shared_curr_circles[nIdx+1] - orig_y;
-                dz = shared_curr_circles[nIdx+2] - orig_z;
-
-                dist = sqrtf(dx*dx + dy*dy + dz*dz);
-                overlap = dist - 2*circle_radius;
-
-                if(overlap < 0){
-
-                    move_amount = overlap * 0.5f / dist;
-
-                    circ_x += dx * move_amount;
-                    circ_y += dy * move_amount;
-                    circ_z += dz * move_amount;
-
-                }
-
-            }
-
-            //mayhaps syncthreads
-        }
-        
-        /*--------------------------------------*/
-        __syncthreads();
-        /*---------- Border Application ---------*/
-
-        shared_curr_circles[3*tIdx + 0] = min(max(circ_x, -width/2  + circle_radius), width/2  - circle_radius);
-        shared_curr_circles[3*tIdx + 1] = min(max(circ_y, -depth/2  + circle_radius), depth/2  - circle_radius);
-        shared_curr_circles[3*tIdx + 2] = min(max(circ_z, -height/2 + circle_radius), height/2 - circle_radius);
-
-    } else {
-        printf("buggin\n");
-    }
-    
-    /*--------------------------------------*/
-    
+  printf("\n");
+  for (int i = 0; i < MAX_CIRCLES * 3; i += 3) {
+    printf("h_curr_circles[%d] = (%f, %f, %f)\n", i / 3, h_curr_circles[i], h_curr_circles[i + 1], h_curr_circles[i + 2]);
+  }
 }
 
+void solver_setup(const softbody_sim::SolverInfo& solver_info)
+{
+  cudaCheckError(cudaMemcpyToSymbol(rest_len, solver_info.rest_len, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(threads_per_block, solver_info.threads_per_block, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(num_blocks, solver_info.num_blocks, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(max_pts, solver_info.max_pts, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(max_nbors_per_pt, solver_info.max_nbors_per_pt, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(max_nbors_per_block, solver_info.max_nbors_per_block, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(max_nbors, solver_info.max_nbors, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(max_rdonly_per_block, solver_info.max_rdonly_per_block, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(max_rdonly, solver_info.max_rdonly, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(dt2, solver_info.dt2_intermediate, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(g, solver_info.gravity_acc, sizeof(int)));
+  cudaCheckError(cudaMemcpyToSymbol(k, solver_info.k_constant, sizeof(int)));
 
+  // cudaCheckError(cudaMemcpyToSymbol(g_curr_circles, h_curr_circles, sizeof(float3) * MAX_CIRCLES));
+  // cudaCheckError(cudaMemcpyToSymbol(g_prev_circles, h_curr_circles, sizeof(float3) * MAX_CIRCLES));
+  // cudaCheckError(cudaMemcpyToSymbol(g_rdonly_nbors, h_rdonly_nbors, sizeof(int) * MAX_RDONLY));
+  // cudaCheckError(cudaMemcpyToSymbol(g_nbor_map, h_nbor_map, sizeof(int) * MAX_NBORS));
 
-
-__global__ void solver_cuda_device(float* device_curr_circles, float* device_prev_circles, 
-                                   uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map,
-                                   float width, float depth, float height, 
-                                   float circle_radius, float circle_mass, 
-                                   float k_constant, float spring_rest_length,
-                                   float damping_constant, float gravity_force,
-                                   uint32_t intermediate_steps, float dt2){
-
-    //Grid will be organized in a linear fashion i.e 0,1,...,n | 0,1,...,n | ... | 0,1,...,n
-    uint32_t bIdx = blockIdx.x; //Block index
-    uint32_t tIdx = threadIdx.x; //Thread index
-
-    __shared__ float shared_curr_circles[3*MAX_RDONLY_CIRCLES];
-
-    //Populate rdonly circles
-    cIdx = tIdx;
-    while(cIdx < 3*MAX_RDONLY_CIRCLES){
-        
-        shared_curr_circles[cIdx] = device_curr_circles[3*device_neighbor_indices[bIdx*MAX_RDONLY_CIRCLES + cIdx/3] + (cIdx%3)]; //device_neighbor_indices
-        cIdx += THREADS_PER_BLOCK;
-    }
-
-    __syncthreads();
-
-    for(uint32_t i = 0; i < intermediate_steps; i++){
-
-        update_circle_position_cuda_precise_device(shared_curr_circles, device_curr_circles,
-                                                   device_prev_circles, device_neighbor_map, 
-                                                   width, depth, height, 
-                                                   circle_radius, circle_mass, 
-                                                   k_constant, spring_rest_length, 
-                                                   damping_constant, intermediate_steps, dt2 );
-        __syncthreads();
-    }
-
-}
-
-
-void solver_update_device(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, 
-                          uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, 
-                          softbody_sim::SolverInfo & solver_info){
-    solver_cuda_device<<<solver_info.num_blocks, THREADS_PER_BLOCK>>>(device_curr_circles, device_prev_circles,
-                                                                      device_neighbor_indices, device_neighbor_map,
-                                                                      solver_info.width, solver_info.depth, solver_info.height,
-                                                                      solver_info.circle_radius, solver_info.circle_mass,
-                                                                      solver_info.k_constant, solver_info.spring_rest_length,
-                                                                      solver_info.damping_constant, solver_info.gravity_force, 
-                                                                      solver_info.intermediate_steps, solver_info.dt2_intermediate);
-    // stress_tester<<<1, 1>>>();
-    cudaCheckError(cudaDeviceSynchronize());
-    // cudaDeviceSynchronize();
-    cudaMemcpy(host_curr_circles, device_curr_circles, 3*solver_info.num_blocks*THREADS_PER_BLOCK,cudaMemcpyDeviceToHost);
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-__global__ void solver_cuda(float* device_curr_circles, float* device_prev_circles, 
-                            uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map,
-                            float width, float depth, float height, 
-                            float circle_radius, float circle_mass, 
-                            float k_constant, float spring_rest_length,
-                            float damping_constant, float gravity_force,
-                            uint32_t intermediate_steps, float dt2){
-
-    //Grid will be organized in a linear fashion i.e 0,1,...,n | 0,1,...,n | ... | 0,1,...,n
-    uint32_t bIdx = blockIdx.x; //Block index
-    uint32_t tIdx = threadIdx.x; //Thread index
-
-    __shared__ float shared_prev_circles[3*THREADS_PER_BLOCK];
-    __shared__ float shared_curr_circles[3*(THREADS_PER_BLOCK + MAX_RDONLY_CIRCLES)];
-    __shared__ uint16_t nbors_buf[NEIGHBORS_PER_CIRCLE*THREADS_PER_BLOCK];
-
-    //Populate update circles
-    uint32_t cIdx = tIdx;
-    while(cIdx < 3*THREADS_PER_BLOCK){
-
-        shared_prev_circles[cIdx] = device_prev_circles[bIdx*3*THREADS_PER_BLOCK + cIdx];
-        shared_curr_circles[cIdx] = device_curr_circles[bIdx*3*THREADS_PER_BLOCK + cIdx];
-        cIdx += THREADS_PER_BLOCK;
-    }
-    __syncthreads();
-
-
-    // //Populate rdonly circles
-    // cIdx = tIdx;
-    // while(cIdx < 3*MAX_RDONLY_CIRCLES){
-        
-    //     shared_curr_circles[cIdx + 3*THREADS_PER_BLOCK] = device_curr_circles[3*device_neighbor_indices[bIdx*MAX_RDONLY_CIRCLES + cIdx/3] + (cIdx%3)]; //device_neighbor_indices
-    //     cIdx += THREADS_PER_BLOCK;
-    // }
-
-    // //Populate neighbor indices
-    // cIdx = tIdx;
-    // while(cIdx < NEIGHBORS_PER_CIRCLE*THREADS_PER_BLOCK){
-
-    //     nbors_buf[cIdx] = device_neighbor_map[bIdx*NEIGHBORS_PER_CIRCLE*THREADS_PER_BLOCK + cIdx];
-    //     cIdx += THREADS_PER_BLOCK;
-    // }
-
-    // __syncthreads();
-
-    // for(uint32_t i = 0; i < intermediate_steps; i++){
-
-    //     update_circle_position_cuda_precise(shared_curr_circles, shared_prev_circles, nbors_buf, 
-    //                                         width, depth, height, 
-    //                                         circle_radius, circle_mass, 
-    //                                         k_constant, spring_rest_length, 
-    //                                         damping_constant, intermediate_steps, dt2 );
-    //     __syncthreads();
-    // }
-
-    // cIdx = tIdx;
-    // while(cIdx < 3*THREADS_PER_BLOCK){
-
-    //     device_prev_circles[3*THREADS_PER_BLOCK*bIdx + cIdx] = shared_prev_circles[cIdx];
-    //     device_curr_circles[3*THREADS_PER_BLOCK*bIdx + cIdx] = shared_curr_circles[cIdx];
-    //     cIdx += THREADS_PER_BLOCK;
-    // }
-
-}
-
-// __global__ void stress_tester()
-// {
-//     __shared__ int stresser[STRESS];
-//     for (int i = 0; i < STRESS; i++) {
-//         stresser[i] = i;
-//         printf("%d\n", stresser[i]);
-//     }
-// }
-
-void solver_update(float* host_curr_circles, float* device_curr_circles, float* device_prev_circles, 
-                   uint16_t* device_neighbor_indices, uint16_t* device_neighbor_map, 
-                   softbody_sim::SolverInfo & solver_info){
-    solver_cuda<<<solver_info.num_blocks, THREADS_PER_BLOCK>>>(device_curr_circles, device_prev_circles,
-                                                               device_neighbor_indices, device_neighbor_map,
-                                                               solver_info.width, solver_info.depth, solver_info.height,
-                                                               solver_info.circle_radius, solver_info.circle_mass,
-                                                               solver_info.k_constant, solver_info.spring_rest_length,
-                                                               solver_info.damping_constant, solver_info.gravity_force, 
-                                                               solver_info.intermediate_steps, solver_info.dt2_intermediate);
-    // stress_tester<<<1, 1>>>();
-    cudaCheckError(cudaDeviceSynchronize());
-    // cudaDeviceSynchronize();
-    cudaMemcpy(host_curr_circles, device_curr_circles, 3*solver_info.num_blocks*THREADS_PER_BLOCK,cudaMemcpyDeviceToHost);
-
+  // for (int i = 0; i < MAX_CIRCLES * 3; i += 3) {
+  //   printf("h_curr_circles[%d] = (%f, %f, %f)\n", i / 3, h_curr_circles[i], h_curr_circles[i + 1], h_curr_circles[i + 2]);
+  // }
+  // printf("\n");
+  // for (int i = 0; i < MAX_RDONLY; i++) {
+  //   printf("h_rdonly_nbors[%d] = %d\n", i, h_rdonly_nbors[i]);
+  // }
+  // printf("\n");
+  // for (int i = 0; i < MAX_NBORS; i++) {
+  //   printf("h_nbor_map[%d] = %d\n", i, h_nbor_map[i]);
+  // }
 }
