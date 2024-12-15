@@ -7,6 +7,7 @@
 struct GlobalConstants
 {
   float particle_rad{1.f};
+  float particle_diameter{2.f};
   float particle_mass{1.f};
 
   int spring_rest_len{4};
@@ -58,6 +59,12 @@ struct GlobalConstants
     update_dt2_intermediate();
   }
 
+  void set_particle_rad(float particle_rad_)
+  {
+    particle_rad = particle_rad_;
+    update_diameter();
+  }
+
 private:
   void update_dt2_intermediate()
   {
@@ -67,6 +74,11 @@ private:
   void update_dt_intermediate()
   {
     dt_intermediate = dt / intermediate_steps;
+  }
+
+  void update_diameter()
+  {
+    particle_diameter = 2 * particle_rad;
   }
 };
 

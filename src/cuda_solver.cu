@@ -80,6 +80,43 @@ __device__ __inline__ void move(const int t_idx, const int b_idx, const int d_of
   d_params.curr_particles[d_idx] = next_particle;
 }
 
+__device__ __inline__ void resolve_collisions(
+  const int t_idx, const int b_idx, const int d_off, const int d_idx)
+{
+  float3 curr_particle = d_params.curr_particles[d_idx];
+  float3 next_particle = curr_particle;
+
+  for (int nbor = 0; nbor < d_params.max_nbors_per_particle; nbor++) {
+    int n_key = d_params.nbor_map[d_off * d_params.max_nbors_per_particle
+      + nbor * d_params.particles_per_block + t_idx];
+    if (n_key >= 0) {
+      int n_idx = 0;
+      if (n_key < d_params.particles_per_block) {
+        n_idx = d_off + n_key;
+      } else {
+        n_idx = d_params.rdonly_nbors[b_idx * d_params.max_rdonly_per_block + n_key
+          - d_params.particles_per_block];
+      }
+      float3 nbor_particle = d_params.curr_particles[n_idx];
+
+      float disp_x = nbor_particle.x - curr_particle.x;
+      float disp_y = nbor_particle.y - curr_particle.y;
+      float disp_z = nbor_particle.z - curr_particle.z;
+      float dist = sqrtf(disp_x * disp_x + disp_y * disp_y + disp_z * disp_z);
+      float overlap = dist - d_params.particle_diameter;
+      if (overlap < 0) {
+        float move_amt = overlap * 0.5 / dist;
+        next_particle.x += disp_x * move_amt;
+        next_particle.y += disp_y * move_amt;
+        next_particle.z += disp_z * move_amt;
+      }
+    }
+  }
+  __syncthreads();
+
+  d_params.curr_particles[d_idx] = next_particle;
+}
+
 __device__ __inline__ void apply_border(
   const int t_idx, const int b_idx, const int d_off, const int d_idx)
 {
@@ -103,7 +140,10 @@ __global__ void update_kernel()
   for (int i = 0; i < d_params.intermediate_steps; i++) {
     move(t_idx, b_idx, d_off, d_idx);
     __syncthreads();
+    resolve_collisions(t_idx, b_idx, d_off, d_idx);
+    __syncthreads();
     apply_border(t_idx, b_idx, d_off, d_idx);
+    __syncthreads();
   }
 }
 

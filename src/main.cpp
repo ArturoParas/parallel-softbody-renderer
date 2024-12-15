@@ -75,9 +75,10 @@ int main()
     h_params.width = 110;
     h_params.height = 110;
     h_params.depth = 110;
-    h_params.spring_k = 10;
+    h_params.spring_k = 100;
     /** TODO: Come back to damping, something seems off... */
-    h_params.spring_damp = 0;
+    h_params.spring_damp = 1;
+    h_params.particle_rad = 1;
 
     input_file >> h_params.spring_rest_len;
     input_file >> h_params.particles_per_block;
