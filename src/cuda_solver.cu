@@ -6,24 +6,6 @@
 #include <cuda_runtime.h>
 #include <driver_functions.h>
 
-#define THREADS_PER_BLOCK 4
-#define NUM_BLOCKS 2
-// #define MAX_CIRCLES THREADS_PER_BLOCK * NUM_BLOCKS
-
-// #define MAX_RDONLY_PER_BLOCK 3
-// #define MAX_RDONLY MAX_RDONLY_PER_BLOCK * NUM_BLOCKS
-
-// #define MAX_NBORS_PER_CIRCLE 3
-// #define MAX_NBORS MAX_NBORS_PER_CIRCLE * MAX_CIRCLES
-
-// #define G -0.1
-// #define DAMP 0.98
-// #define DT 0.1
-// #define DT2 DT * DT
-// #define K 2.
-// #define RL 1
-// #define MASS 1
-
 #define min(a,b) (a < b ? a : b)
 #define max(a,b) (a > b ? a : b)
 #define abs(a) (a < 0 ?  -a : a)
@@ -57,11 +39,18 @@ __device__ __inline__ void move(const int t_idx, const int b_idx, const int d_of
   next_particle.y += (curr_particle.y - prev_particle.y) * d_params.spring_damp;
   next_particle.z += (curr_particle.z - prev_particle.z) * d_params.spring_damp;
 
-  // Move according to acceleration
+  // Move according to current acceleration
   for (int nbor = 0; nbor < d_params.max_nbors_per_particle; nbor++) {
-    int n_off = d_params.nbor_map[(d_off + nbor) * d_params.max_nbors_per_particle + t_idx];
-    if (n_off >= 0) {
-      float3 nbor_particle = d_params.curr_particles[d_params.rdonly_nbors[d_off + n_off]];
+    int n_key = d_params.nbor_map[d_off * d_params.max_nbors_per_particle + nbor * d_params.particles_per_block + t_idx];
+    if (n_key >= 0) {
+      int n_idx = 0;
+      if (n_key < d_params.particles_per_block) {
+        n_idx = d_off + n_key;
+      } else {
+        n_idx = d_params.rdonly_nbors[b_idx * d_params.max_rdonly_per_block + n_key - d_params.particles_per_block];
+      }
+      printf("particle %d, nbor %d, n_key %d, n_idx %d\n", d_idx, nbor, n_key, n_idx);
+      float3 nbor_particle = d_params.curr_particles[n_idx];
 
       float dx = nbor_particle.x - curr_particle.x;
       float dy = nbor_particle.y - curr_particle.y;

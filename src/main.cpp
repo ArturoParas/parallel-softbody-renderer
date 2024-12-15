@@ -29,9 +29,6 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-#define THREADS_PER_BLOCK 4
-#define NUM_BLOCKS 2
-
 #define DEBUG
 #ifdef DEBUG
 #define cudaCheckError(ans)  cudaAssert((ans), __FILE__, __LINE__);
