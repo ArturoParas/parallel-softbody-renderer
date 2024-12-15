@@ -32,7 +32,15 @@ std::size_t std::hash<Pt3>::operator()(const Pt3& pt) const
 std::vector<int> threads_per_block_to_dims(const int threads_per_block, const int rest_len)
 {
   std::vector<int> dims;
-  if (threads_per_block == 320) {
+  if (threads_per_block == 672) {
+    dims.push_back(12 * rest_len);
+    dims.push_back(8 * rest_len);
+    dims.push_back(7 * rest_len);
+  } else if (threads_per_block == 640) {
+    dims.push_back(10 * rest_len);
+    dims.push_back(8 * rest_len);
+    dims.push_back(8 * rest_len);
+  } else if (threads_per_block == 320) {
     dims.push_back(8 * rest_len);
     dims.push_back(8 * rest_len);
     dims.push_back(5 * rest_len);
@@ -91,6 +99,19 @@ int get_cube_pts(
         }
       }
     }
+  }
+  return pts.size();
+}
+
+int get_good_cube_pts(
+  const int threads_per_block, const int base, const Pt3& center, const int rest_len,
+  std::vector<std::vector<Pt3>>& pts)
+{
+  float sqrt3 = sqrt(3);
+  float sqrt23 = sqrt(2 / 3);
+  std::vector<Pt3> block;
+  for (int i = 0; i < base; i += rest_len) {
+    ;
   }
   return pts.size();
 }
@@ -286,19 +307,24 @@ void reget_nbors_map(
 void write_to_file(
   const int rest_len, const int threads_per_block, const int num_blocks, const int max_pts,
   const int max_nbors_per_pt, const int max_nbors_per_block, const int max_nbors,
-  const int max_rdonly_per_block, const int max_rdonly, const std::vector<Pt3>& pts,
+  const int max_rdonly_per_block, const int max_rdonly, const int rad, const std::vector<Pt3>& pts,
   const std::vector<bool>& indicators, const std::vector<int>& rdonly_map,
   const std::vector<int>& nbors_map, const std::string file)
 {
+  std::cout << "FOR COMPILE TIME DEFINES:" << std::endl;
   std::cout << "Particles per block = " << threads_per_block << std::endl;
   std::cout << "Max rdonly per block = " << max_rdonly_per_block << std::endl;
   std::cout << "Max nbors per block = " << max_nbors_per_block << std::endl;
+  std::cout << std::endl;
+  std::cout << "FOR BENCHMARKING:" << std::endl;
+  std::cout << "Num blocks = " << num_blocks << std::endl;
+  std::cout << "Max num particles = " << max_pts << std::endl;
 
   std::ofstream of ("../inputs/" + file);
 
   of << rest_len << " " << threads_per_block << " " << num_blocks << " " << max_pts << " "
     << max_nbors_per_pt << " " << max_nbors_per_block << " " << max_nbors << " "
-    << max_rdonly_per_block << " " << max_rdonly << "\n";
+    << max_rdonly_per_block << " " << max_rdonly << " " << rad << "\n";
 
   for (const auto& pt : pts) {
     of << pt.x << " " << pt.y << " " << pt.z << "\n";
@@ -378,7 +404,6 @@ int main(int argc, char* argv[])
     num_blocks = get_sphere_pts(threads_per_block, rad, center, rest_len, pts);
   }
 
-  // int num_blocks = get_pts(threads_per_block, rad, center, rest_len, pts);
   int max_pts = threads_per_block * num_blocks;
   reget_pts(num_blocks, threads_per_block, pts, new_pts, idx_map, indicators);
 
@@ -395,7 +420,7 @@ int main(int argc, char* argv[])
   reget_nbors_map(nbors_map, new_nbors_map);
 
   write_to_file(rest_len, threads_per_block, num_blocks, max_pts, max_nbors_per_pt,
-    max_nbors_per_block, max_nbors, max_rdonly_per_block, max_rdonly, new_pts, indicators,
+    max_nbors_per_block, max_nbors, max_rdonly_per_block, max_rdonly, rad, new_pts, indicators,
     new_rdonly_map, new_nbors_map, file);
   return 0;
 }

@@ -80,11 +80,13 @@ int main(int argc, char* argv[])
 
     int opt;
     char* end;
-    while ((opt = getopt(argc, argv, "s:k:c:g:w:h:d:t:i:")) != EOF) {
+    while ((opt = getopt(argc, argv, "s:k:c:g:w:h:d:t:i:r:")) != EOF) {
         switch(opt) {
         case 's':
             if (*optarg == 'c') {
                 input_file_name = "../inputs/cube.txt";
+            } else if (*optarg == 'p') {
+                input_file_name = "../inputs/pyramid.txt";
             } else if (*optarg == 's') {
                 input_file_name = "../inputs/sphere.txt";
             }
@@ -113,11 +115,13 @@ int main(int argc, char* argv[])
         case 'i':
             h_params.set_intermediate_steps(strtol(optarg, &end, 10));
             break;
+        case 'r':
+            h_params.set_particle_rad(strtod(optarg, &end));
+            break;
         default:
             break;
         }
     }
-    std::cout << "spring damp = " << h_params.spring_damp << std::endl;
 
     // Read Input
     std::fstream input_file(input_file_name, std::ios_base::in);
@@ -132,6 +136,14 @@ int main(int argc, char* argv[])
     input_file >> h_params.max_nbors;
     input_file >> h_params.max_rdonly_per_block;
     input_file >> h_params.max_rdonly;
+    int rad;
+    input_file >> rad;
+    h_params.height = 2 * rad + h_params.particle_diameter + 10;
+    h_params.width = 2 * rad + h_params.particle_diameter + 10;
+    h_params.depth = 2 * rad + h_params.particle_diameter + 10;
+    std::cout << h_params.height << std::endl;
+    std::cout << h_params.width << std::endl;
+    std::cout << h_params.depth << std::endl;
 
     float* h_curr_particles = (float*)malloc(3 * h_params.max_particles * sizeof(float));
     bool* particle_indicators = (bool*)malloc(h_params.max_particles * sizeof(bool));
@@ -278,7 +290,7 @@ int main(int argc, char* argv[])
         }
 
         window.display();
-        std::this_thread::sleep_for(std::chrono::milliseconds((int)(h_params.dt * 1000)));
+        // std::this_thread::sleep_for(std::chrono::milliseconds((int)(h_params.dt * 1000)));
     }
 
     free(h_curr_particles);

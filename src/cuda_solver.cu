@@ -26,9 +26,26 @@ if (code != cudaSuccess)
 #define cudaCheckError(ans) ans
 #endif
 
-#define PARTICLES_PER_BLOCK 320
-#define MAX_RDONLY_PER_BLOCK 380
-#define MAX_NBORS_PER_BLOCK 8320
+// Small tetrahedral-octahedral honeycomb
+// #define PARTICLES_PER_BLOCK 13
+// #define MAX_RDONLY_PER_BLOCK 0
+// #define MAX_NBORS_PER_BLOCK 156
+
+// Small tetrahedron
+// #define PARTICLES_PER_BLOCK 4
+// #define MAX_RDONLY_PER_BLOCK 0
+// #define MAX_NBORS_PER_BLOCK 12
+
+// Biggest cube
+#define PARTICLES_PER_BLOCK 640
+#define MAX_RDONLY_PER_BLOCK 560
+#define MAX_NBORS_PER_BLOCK 16640
+
+// First cube that is too large. If you compile with this, you will get an error saying too much
+// shared data, which is expected!
+// #define PARTICLES_PER_BLOCK 672
+// #define MAX_RDONLY_PER_BLOCK 588
+// #define MAX_NBORS_PER_BLOCK 17472
 
 __constant__ GlobalConstants d_params;
 
@@ -101,10 +118,10 @@ __device__ __inline__ float3 update_iteration(
 
   next_particle.x = min(max(next_particle.x, -d_params.width / 2 + d_params.particle_rad),
     d_params.width / 2 - d_params.particle_rad);
-  next_particle.y = min(max(next_particle.y, -d_params.height / 2 + d_params.particle_rad),
-    d_params.height / 2 - d_params.particle_rad);
-  next_particle.z = min(max(next_particle.z, -d_params.depth / 2 + d_params.particle_rad),
+  next_particle.y = min(max(next_particle.y, -d_params.depth / 2 + d_params.particle_rad),
     d_params.depth / 2 - d_params.particle_rad);
+  next_particle.z = min(max(next_particle.z, -d_params.height / 2 + d_params.particle_rad),
+    d_params.height / 2 - d_params.particle_rad);
   s_curr_particles[t_idx] = next_particle;
 
   return prev_particle;
