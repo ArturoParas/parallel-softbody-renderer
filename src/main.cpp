@@ -69,6 +69,8 @@ int main()
     std::string input_file_name = "../inputs/sphere.txt";
     std::fstream input_file(input_file_name, std::ios_base::in);
     GlobalConstants h_params;
+    h_params.set_dt_and_intermediate_steps(0.01, 1);
+    h_params.set_g(0);
 
     input_file >> h_params.spring_rest_len;
     input_file >> h_params.particles_per_block;
@@ -81,7 +83,7 @@ int main()
     input_file >> h_params.max_rdonly;
 
     float* h_curr_particles = (float*)malloc(3 * h_params.max_particles * sizeof(float));
-    uint8_t* particle_indicators = (uint8_t*)malloc(h_params.max_particles * sizeof(uint8_t));
+    bool* particle_indicators = (bool*)malloc(h_params.max_particles * sizeof(bool));
     int16_t* h_rdonly_nbors = (int16_t*)malloc(h_params.max_rdonly * sizeof(int16_t));
     int16_t* h_nbor_map = (int16_t*)malloc(h_params.max_nbors * sizeof(int16_t));
 
@@ -137,7 +139,7 @@ int main()
     //Objects
     std::vector<Object> objects;
 
-    for (uint32_t i = 0; i < h_params.num_blocks * h_params.particles_per_block; i++) {
+    for (int i = 0; i < h_params.max_particles; i++) {
         if (particle_indicators[i]) {
             objects.emplace_back(&model, glm::vec3(5.f * i, 0.f, 0.f), glm::vec3(0.f),
                 glm::vec3(h_params.particle_rad), i);
@@ -176,6 +178,9 @@ int main()
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
             camera.position += camera.Right() * MOVE_SPEED * dt;
         }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) {
+            window.close();
+        }
 
         if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) {
             if (isFirstMouse) {
@@ -206,21 +211,19 @@ int main()
         shader.SetMat4Param("view",camera.GetViewMatrix());
         shader.SetVec3Param("lightPos",camera.position);
 
-        for (uint32_t i = 0 ; i < objects.size(); i++){
+        for (int i = 0 ; i < objects.size(); i++){
             Object& obj = objects[i];
             obj.position.x = h_curr_particles[3 * obj.tag + 0];
             obj.position.y = h_curr_particles[3 * obj.tag + 1];
             obj.position.z = h_curr_particles[3 * obj.tag + 2];
-            
-            // if (i != 0) {
-              // std::cout << i << ": " << obj.position.x << " " << obj.position.z << std::endl;
-            // }
+
+            // std::cout << "particle " << i << " at (" << obj.position.x << ", " << obj.position.y << ", " << obj.position.z << ")" << std::endl;
 
             obj.Draw(shader, glm::vec3(0.4f, 0.4f, 0.8f));
         }
 
         window.display();
-        std::this_thread::sleep_for(std::chrono::milliseconds((int)(15)));
+        std::this_thread::sleep_for(std::chrono::milliseconds((int)(h_params.dt * 1000)));
     }
 
     free(h_curr_particles);

@@ -49,7 +49,6 @@ __device__ __inline__ void move(const int t_idx, const int b_idx, const int d_of
       } else {
         n_idx = d_params.rdonly_nbors[b_idx * d_params.max_rdonly_per_block + n_key - d_params.particles_per_block];
       }
-      printf("particle %d, nbor %d, n_key %d, n_idx %d\n", d_idx, nbor, n_key, n_idx);
       float3 nbor_particle = d_params.curr_particles[n_idx];
 
       float dx = nbor_particle.x - curr_particle.x;
@@ -58,16 +57,20 @@ __device__ __inline__ void move(const int t_idx, const int b_idx, const int d_of
 
       float dist = sqrtf(dx * dx + dy * dy + dz * dz);
       // DEBUG
-      if (dist < 1e-16) {
-        printf("TOO CLOSE\n");
-      }
+      // if (dist < 1e-16) {
+      //   printf("TOO CLOSE\n");
+      // }
 
-      float norm_acc = d_params.spring_k * (dist - d_params.spring_rest_len) / dist
-        / d_params.particle_mass;
+      float norm_acc = d_params.spring_k * (dist - d_params.spring_rest_len)
+        / (dist * d_params.particle_mass);
+      // printf("acc %f, k %f, dist %f, rest len %d, mass %f\n", norm_acc, d_params.spring_k, dist, d_params.spring_rest_len, d_params.particle_mass);
 
       next_particle.x += norm_acc * dx * d_params.dt2_intermediate;
       next_particle.y += norm_acc * dy * d_params.dt2_intermediate;
-      next_particle.z += (norm_acc + d_params.g) * dz * d_params.dt2_intermediate;
+      next_particle.z += (norm_acc * dz + d_params.g) * d_params.dt2_intermediate;
+      // printf("change in x %f, dx %f, dt2 intermediate %f\n", norm_acc * dx * d_params.dt2_intermediate, dx, d_params.dt2_intermediate);
+      // printf("change in y %f, dy %f, dt2 intermediate %f\n", norm_acc * dy * d_params.dt2_intermediate, dy, d_params.dt2_intermediate);
+      // printf("change in z %f, dz %f, dt2 intermediate %f\n", norm_acc * dz * d_params.dt2_intermediate, dz, d_params.dt2_intermediate);
     }
   }
   __syncthreads();
@@ -92,10 +95,10 @@ void solver_update(GlobalConstants& h_params, float* h_curr_particles)
   cudaCheckError(cudaDeviceSynchronize());
   cudaCheckError(cudaMemcpy(h_curr_particles, h_params.curr_particles, h_params.max_particles * sizeof(float3), cudaMemcpyDeviceToHost));
 
-  printf("\n");
-  for (int i = 0; i < h_params.max_particles * 3; i += 3) {
-    printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
-  }
+  // printf("\n");
+  // for (int i = 0; i < h_params.max_particles * 3; i += 3) {
+  //   printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
+  // }
 }
 
 void solver_setup(
@@ -114,10 +117,10 @@ void solver_setup(
 
   cudaCheckError(cudaMemcpyToSymbol(d_params, &h_params, sizeof(GlobalConstants)));
 
-  printf("\n");
-  for (int i = 0; i < 3 * h_params.max_particles; i += 3) {
-    printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
-  }
+  // printf("\n");
+  // for (int i = 0; i < 3 * h_params.max_particles; i += 3) {
+  //   printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
+  // }
 }
 
 void solver_free(GlobalConstants& h_params)

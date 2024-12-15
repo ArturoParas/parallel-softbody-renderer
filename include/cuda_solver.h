@@ -14,6 +14,7 @@ struct GlobalConstants
   float spring_damp{0.98};
 
   int intermediate_steps{8};
+  float dt{0.1};
   float dt2_intermediate{0.1 * 0.1 / (8 * 8)};
   float g{-64.f};
   float width{1000.f};  // x
@@ -33,6 +34,41 @@ struct GlobalConstants
   float3* prev_particles{NULL};
   int16_t* rdonly_nbors{NULL};
   int16_t* nbor_map{NULL};
+
+  void set_dt(float dt_)
+  {
+    dt = dt_;
+    update_dt2_intermediate();
+  }
+
+  void set_intermediate_steps(int intermediate_steps_)
+  {
+    intermediate_steps = intermediate_steps_;
+    update_dt2_intermediate();
+  }
+
+  void set_dt_and_intermediate_steps(float dt_, int intermediate_steps_)
+  {
+    dt = dt_;
+    intermediate_steps = intermediate_steps_;
+    update_dt2_intermediate();
+  }
+
+  void set_spring_k(float spring_k_)
+  {
+    spring_k = spring_k_;
+  }
+
+  void set_g(float g_)
+  {
+    g = g_;
+  }
+
+private:
+  void update_dt2_intermediate()
+  {
+    dt2_intermediate = dt * dt / (intermediate_steps * intermediate_steps);
+  }
 };
 
 void solver_update(GlobalConstants& h_params, float* h_curr_particles);
