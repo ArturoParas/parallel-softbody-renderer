@@ -69,8 +69,15 @@ int main()
     std::string input_file_name = "../inputs/sphere.txt";
     std::fstream input_file(input_file_name, std::ios_base::in);
     GlobalConstants h_params;
+    /** TODO: Damping too high, make it with respect to time instead of frames, but how? */
     h_params.set_dt_and_intermediate_steps(0.01, 1);
-    h_params.set_g(0);
+    h_params.g = -9.81;
+    h_params.width = 110;
+    h_params.height = 110;
+    h_params.depth = 110;
+    h_params.spring_k = 10;
+    /** TODO: Come back to damping, something seems off... */
+    h_params.spring_damp = 0;
 
     input_file >> h_params.spring_rest_len;
     input_file >> h_params.particles_per_block;
@@ -178,6 +185,12 @@ int main()
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
             camera.position += camera.Right() * MOVE_SPEED * dt;
         }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
+          camera.position += camera.Up() * MOVE_SPEED * dt;
+        }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) {
+          camera.position -= camera.Up() * MOVE_SPEED * dt;
+        }
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) {
             window.close();
         }
@@ -216,8 +229,6 @@ int main()
             obj.position.x = h_curr_particles[3 * obj.tag + 0];
             obj.position.y = h_curr_particles[3 * obj.tag + 1];
             obj.position.z = h_curr_particles[3 * obj.tag + 2];
-
-            // std::cout << "particle " << i << " at (" << obj.position.x << ", " << obj.position.y << ", " << obj.position.z << ")" << std::endl;
 
             obj.Draw(shader, glm::vec3(0.4f, 0.4f, 0.8f));
         }

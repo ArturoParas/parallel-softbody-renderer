@@ -15,6 +15,7 @@ struct GlobalConstants
 
   int intermediate_steps{8};
   float dt{0.1};
+  float dt_intermediate{0.1 / 8};
   float dt2_intermediate{0.1 * 0.1 / (8 * 8)};
   float g{-64.f};
   float width{1000.f};  // x
@@ -38,12 +39,14 @@ struct GlobalConstants
   void set_dt(float dt_)
   {
     dt = dt_;
+    update_dt_intermediate();
     update_dt2_intermediate();
   }
 
   void set_intermediate_steps(int intermediate_steps_)
   {
     intermediate_steps = intermediate_steps_;
+    update_dt_intermediate();
     update_dt2_intermediate();
   }
 
@@ -51,23 +54,19 @@ struct GlobalConstants
   {
     dt = dt_;
     intermediate_steps = intermediate_steps_;
+    update_dt_intermediate();
     update_dt2_intermediate();
-  }
-
-  void set_spring_k(float spring_k_)
-  {
-    spring_k = spring_k_;
-  }
-
-  void set_g(float g_)
-  {
-    g = g_;
   }
 
 private:
   void update_dt2_intermediate()
   {
     dt2_intermediate = dt * dt / (intermediate_steps * intermediate_steps);
+  }
+
+  void update_dt_intermediate()
+  {
+    dt_intermediate = dt / intermediate_steps;
   }
 };
 

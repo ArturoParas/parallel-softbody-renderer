@@ -48,6 +48,10 @@ std::vector<int> threads_per_block_to_dims(const int threads_per_block, const in
     dims.push_back(2 * rest_len);
     dims.push_back(2 * rest_len);
     dims.push_back(1 * rest_len);
+  } else if (threads_per_block == 1) {
+    dims.push_back(1 * rest_len);
+    dims.push_back(1 * rest_len);
+    dims.push_back(1 * rest_len);
   } else {
     std::cerr << "No conversion from given blocks per thread (" << threads_per_block
       << ") to block dims" << std::endl;
