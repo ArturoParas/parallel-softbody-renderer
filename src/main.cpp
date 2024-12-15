@@ -77,10 +77,11 @@ int main(int argc, char* argv[])
     /** TODO: Come back to damping, something seems off... */
     h_params.spring_damp = 1;
     h_params.particle_rad = 1;
+    int benchmark_iters = 100;
 
     int opt;
     char* end;
-    while ((opt = getopt(argc, argv, "s:k:c:g:w:h:d:t:i:r:")) != EOF) {
+    while ((opt = getopt(argc, argv, "s:k:c:g:w:h:d:t:i:r:m:")) != EOF) {
         switch(opt) {
         case 's':
             if (*optarg == 'c') {
@@ -118,6 +119,9 @@ int main(int argc, char* argv[])
         case 'r':
             h_params.set_particle_rad(strtod(optarg, &end));
             break;
+        case 'm':
+            benchmark_iters = strtol(optarg, &end, 10);
+            break;
         default:
             break;
         }
@@ -141,9 +145,6 @@ int main(int argc, char* argv[])
     h_params.height = 2 * rad + h_params.particle_diameter + 10;
     h_params.width = 2 * rad + h_params.particle_diameter + 10;
     h_params.depth = 2 * rad + h_params.particle_diameter + 10;
-    std::cout << h_params.height << std::endl;
-    std::cout << h_params.width << std::endl;
-    std::cout << h_params.depth << std::endl;
 
     float* h_curr_particles = (float*)malloc(3 * h_params.max_particles * sizeof(float));
     bool* particle_indicators = (bool*)malloc(h_params.max_particles * sizeof(bool));
@@ -215,7 +216,15 @@ int main(int argc, char* argv[])
     //Main Loop
     bool isFirstMouse = true;
     sf::Vector2i lastMousePos;
-    while (window.isOpen()) {
+    double compute_time = 0;
+    double draw_time = 0;
+    double total_time = 0;
+    double kernel_time = 0;
+    int benchmark_idx = 0;
+    std::cout << "Running for " << benchmark_iters << " iterations." << std::endl;
+    const auto total_start = std::chrono::steady_clock::now();
+    while (benchmark_idx < benchmark_iters) {
+        benchmark_idx++;
         float dt = clock.restart().asSeconds();
 
         sf::Event event;
@@ -271,7 +280,10 @@ int main(int argc, char* argv[])
             window.setMouseCursorVisible(true);
         }
 
-        solver_update(h_params, h_curr_particles);
+        const auto compute_start = std::chrono::steady_clock::now();
+        kernel_time += solver_update(h_params, h_curr_particles);
+        const auto compute_end = std::chrono::steady_clock::now();
+        compute_time += std::chrono::duration_cast<std::chrono::duration<double>>(compute_end - compute_start).count();
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -280,6 +292,7 @@ int main(int argc, char* argv[])
         shader.SetMat4Param("view",camera.GetViewMatrix());
         shader.SetVec3Param("lightPos",camera.position);
 
+        const auto draw_start = std::chrono::steady_clock::now();
         for (int i = 0 ; i < objects.size(); i++){
             Object& obj = objects[i];
             obj.position.x = h_curr_particles[3 * obj.tag + 0];
@@ -290,8 +303,25 @@ int main(int argc, char* argv[])
         }
 
         window.display();
+        const auto draw_end = std::chrono::steady_clock::now();
+        draw_time += std::chrono::duration_cast<std::chrono::duration<double>>(draw_end - draw_start).count();
         // std::this_thread::sleep_for(std::chrono::milliseconds((int)(h_params.dt * 1000)));
     }
+    if (window.isOpen()) {
+        window.close();
+    }
+    const auto total_end = std::chrono::steady_clock::now();
+    total_time = std::chrono::duration_cast<std::chrono::duration<double>>(total_end - total_start).count();
+    std::cout << std::endl;
+    std::cout << "Kernel time = " << kernel_time << " s" << std::endl;
+    std::cout << "Compute time = " << compute_time << " s" << std::endl;
+    std::cout << "Draw time = " << draw_time << " s" << std::endl;
+    std::cout << "Total time = " << total_time << " s" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Kernel time per iteration = " << kernel_time / benchmark_iters << " s/iter" << std::endl;
+    std::cout << "Compute time per iteration = " << compute_time / benchmark_iters << " s/iter" << std::endl;
+    std::cout << "Draw time per iteration = " << draw_time / benchmark_iters << " s/iter" << std::endl;
+    std::cout << "Total time per iteration = " << total_time / benchmark_iters << " s/iter" << std::endl;
 
     free(h_curr_particles);
     free(particle_indicators);

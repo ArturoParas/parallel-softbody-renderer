@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <iostream>
+#include <chrono>
 
 #include "../include/cuda_solver.h"
 #include <cuda.h>
@@ -159,12 +160,17 @@ __global__ void update_kernel()
   d_params.curr_particles[d_idx] = s_curr_particles[t_idx];
 }
 
-void solver_update(GlobalConstants& h_params, float* h_curr_particles)
+double solver_update(GlobalConstants& h_params, float* h_curr_particles)
 {
+  const auto kernel_start = std::chrono::steady_clock::now();
   update_kernel<<<h_params.num_blocks, h_params.particles_per_block>>>();
+  const auto kernel_end = std::chrono::steady_clock::now();
+  const double kernel_time = std::chrono::duration_cast<std::chrono::duration<double>>(kernel_end - kernel_start).count();
   cudaCheckError(cudaDeviceSynchronize());
   cudaCheckError(cudaMemcpy(h_curr_particles, h_params.curr_particles,
     h_params.max_particles * sizeof(float3), cudaMemcpyDeviceToHost));
+
+  return kernel_time;
 
   // printf("\n");
   // for (int i = 0; i < h_params.max_particles * 3; i += 3) {

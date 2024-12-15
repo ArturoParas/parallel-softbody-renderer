@@ -82,7 +82,7 @@ private:
   }
 };
 
-void solver_update(GlobalConstants& h_params, float* h_curr_particles);
+double solver_update(GlobalConstants& h_params, float* h_curr_particles);
 
 void solver_setup(
   GlobalConstants& h_params, const float* h_curr_particles, const int16_t* h_rdonly_nbors,
