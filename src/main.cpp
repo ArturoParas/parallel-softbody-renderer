@@ -4,6 +4,7 @@
 #include <sstream>
 #include <chrono>
 #include <thread>
+#include <getopt.h>
 
 //External Libraries
 #include <SFML/Window.hpp>
@@ -62,14 +63,11 @@ std::string ReadTextFile(const std::string & filename){
 
 }
 
-int main()
+int main(int argc, char* argv[])
 {
-
-    // Read Input
-    std::string input_file_name = "../inputs/sphere.txt";
-    std::fstream input_file(input_file_name, std::ios_base::in);
+    std::string input_file_name = "../inputs/cube.txt";
     GlobalConstants h_params;
-    /** TODO: Damping too high, make it with respect to time instead of frames, but how? */
+    /** TODO: Good debugging params, delete later */
     h_params.set_dt_and_intermediate_steps(0.01, 1);
     h_params.g = -9.81;
     h_params.width = 110;
@@ -79,6 +77,51 @@ int main()
     /** TODO: Come back to damping, something seems off... */
     h_params.spring_damp = 1;
     h_params.particle_rad = 1;
+
+    int opt;
+    char* end;
+    while ((opt = getopt(argc, argv, "s:k:c:g:w:h:d:t:i:")) != EOF) {
+        switch(opt) {
+        case 's':
+            if (*optarg == 'c') {
+                input_file_name = "../inputs/cube.txt";
+            } else if (*optarg == 's') {
+                input_file_name = "../inputs/sphere.txt";
+            }
+            break;
+        case 'k':
+            h_params.spring_k = strtod(optarg, &end);
+            break;
+        case 'c':
+            h_params.spring_damp = strtod(optarg, &end);
+            break;
+        case 'g':
+            h_params.g = strtod(optarg, &end);
+            break;
+        case 'w':
+            h_params.width = strtod(optarg, &end);
+            break;
+        case 'h':
+            h_params.height = strtod(optarg, &end);
+            break;
+        case 'd':
+            h_params.depth = strtod(optarg, &end);
+            break;
+        case 't':
+            h_params.set_dt(strtod(optarg, &end));
+            break;
+        case 'i':
+            h_params.set_intermediate_steps(strtol(optarg, &end, 10));
+            break;
+        default:
+            break;
+        }
+    }
+    std::cout << "spring damp = " << h_params.spring_damp << std::endl;
+
+    // Read Input
+    std::fstream input_file(input_file_name, std::ios_base::in);
+    /** TODO: Damping too high, make it with respect to time instead of frames, but how? */
 
     input_file >> h_params.spring_rest_len;
     input_file >> h_params.particles_per_block;

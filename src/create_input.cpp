@@ -36,6 +36,10 @@ std::vector<int> threads_per_block_to_dims(const int threads_per_block, const in
     dims.push_back(8 * rest_len);
     dims.push_back(8 * rest_len);
     dims.push_back(5 * rest_len);
+  } else if (threads_per_block == 32) {
+    dims.push_back(4 * rest_len);
+    dims.push_back(4 * rest_len);
+    dims.push_back(2 * rest_len);
   } else if (threads_per_block == 16) {
     dims.push_back(4 * rest_len);
     dims.push_back(2 * rest_len);
@@ -60,7 +64,45 @@ std::vector<int> threads_per_block_to_dims(const int threads_per_block, const in
   return dims;
 }
 
-int get_pts(
+int get_cube_pts(
+  const int threads_per_block, const int rad, const Pt3& center, const int rest_len,
+  std::vector<std::vector<Pt3>>& pts)
+{
+  std::vector<int> block_dims = threads_per_block_to_dims(threads_per_block, rest_len);
+  for (int z_block_off = -rad; z_block_off <= rad; z_block_off += block_dims.at(2)) {
+    int z_block_next = std::min(z_block_off + block_dims.at(2), rad);
+    for (int y_block_off = -rad; y_block_off <= rad; y_block_off += block_dims.at(1)) {
+      int y_block_next = std::min(y_block_off + block_dims.at(1), rad);
+      for (int x_block_off = -rad; x_block_off <= rad; x_block_off += block_dims.at(0)) {
+        std::vector<Pt3> block_pts;
+        int x_block_next = std::min(x_block_off + block_dims.at(0), rad);
+        for (int z = z_block_off; z < z_block_next; z += rest_len) {
+          int z2 = z * z;
+          for (int y = y_block_off; y < y_block_next; y += rest_len) {
+            int y2 = y * y;
+            for (int x = x_block_off; x < x_block_next; x += rest_len) {
+              int x2 = x * x;
+              block_pts.push_back(Pt3(x + center.x, y + center.y, z + center.z));
+            }
+          }
+        }
+        if (block_pts.size() != 0) {
+          pts.push_back(block_pts);
+        }
+      }
+    }
+  }
+  return pts.size();
+}
+
+int get_pyramid_pts(
+  const int threads_per_block, const int base, const Pt3& center, const int rest_len,
+  std::vector<std::vector<Pt3>>& pts)
+{
+  ;
+}
+
+int get_sphere_pts(
   const int threads_per_block, const int rad, const Pt3& center, const int rest_len,
   std::vector<std::vector<Pt3>>& pts)
 {
@@ -275,7 +317,8 @@ void write_to_file(
 
 int main(int argc, char* argv[])
 {
-  std::string file = "sphere.txt";
+  std::string file = "cube.txt";
+  int shape = 0;
   int rad = 53;
   int rest_len = 4;
   Pt3 center(0, 0, 0);
@@ -283,7 +326,7 @@ int main(int argc, char* argv[])
 
   int opt;
   char* end;
-  while ((opt = getopt(argc, argv, "r:l:t:")) != EOF) {
+  while ((opt = getopt(argc, argv, "r:l:t:s:")) != EOF) {
     switch (opt) {
     case 'r':
       rad = strtol(optarg, &end, 10);
@@ -293,6 +336,18 @@ int main(int argc, char* argv[])
       break;
     case 't':
       threads_per_block = strtol(optarg, &end, 10);
+      break;
+    case 's':
+      if (*optarg == 'c') {
+        file = "cube.txt";
+        shape = 0;
+      } else if (*optarg == 'p') {
+        file = "pyramid.txt";
+        shape = 1;
+      } else if (*optarg == 's') {
+        file = "sphere.txt";
+        shape = 2;
+      }
       break;
     default:
       std::cout << "Given optargs not valid" << std::endl;
@@ -310,7 +365,16 @@ int main(int argc, char* argv[])
   std::vector<std::vector<int>> nbors_map;
   std::vector<int> new_nbors_map;
 
-  int num_blocks = get_pts(threads_per_block, rad, center, rest_len, pts);
+  int num_blocks = 0;
+  if (shape == 0) {
+    num_blocks = get_cube_pts(threads_per_block, rad, center, rest_len, pts);
+  }  else if (shape == 1) {
+     int num_blocks = get_pyramid_pts(threads_per_block, rad, center, rest_len, pts);
+  } else if (shape == 2) {
+    num_blocks = get_sphere_pts(threads_per_block, rad, center, rest_len, pts);
+  }
+
+  // int num_blocks = get_pts(threads_per_block, rad, center, rest_len, pts);
   int max_pts = threads_per_block * num_blocks;
   reget_pts(num_blocks, threads_per_block, pts, new_pts, idx_map, indicators);
 
