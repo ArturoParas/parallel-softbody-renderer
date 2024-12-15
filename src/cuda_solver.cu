@@ -28,7 +28,8 @@ if (code != cudaSuccess)
 
 __constant__ GlobalConstants d_params;
 
-__device__ __inline__ void move(const int t_idx, const int b_idx, const int d_off, const int d_idx)
+__device__ __inline__ void update_iteration(
+  const int t_idx, const int b_idx, const int d_off, const int d_idx)
 {
   float3 prev_particle = d_params.prev_particles[d_idx];
   float3 curr_particle = d_params.curr_particles[d_idx];
@@ -78,13 +79,10 @@ __device__ __inline__ void move(const int t_idx, const int b_idx, const int d_of
 
   d_params.prev_particles[d_idx] = curr_particle;
   d_params.curr_particles[d_idx] = next_particle;
-}
+  __syncthreads();
 
-__device__ __inline__ void resolve_collisions(
-  const int t_idx, const int b_idx, const int d_off, const int d_idx)
-{
-  float3 curr_particle = d_params.curr_particles[d_idx];
-  float3 next_particle = curr_particle;
+  curr_particle = next_particle;
+  next_particle = curr_particle;
 
   for (int nbor = 0; nbor < d_params.max_nbors_per_particle; nbor++) {
     int n_key = d_params.nbor_map[d_off * d_params.max_nbors_per_particle
@@ -114,20 +112,13 @@ __device__ __inline__ void resolve_collisions(
   }
   __syncthreads();
 
-  d_params.curr_particles[d_idx] = next_particle;
-}
-
-__device__ __inline__ void apply_border(
-  const int t_idx, const int b_idx, const int d_off, const int d_idx)
-{
-  float3 curr_particle = d_params.curr_particles[d_idx];
-  curr_particle.x = min(max(curr_particle.x, -d_params.width / 2 + d_params.particle_rad),
+  next_particle.x = min(max(next_particle.x, -d_params.width / 2 + d_params.particle_rad),
     d_params.width / 2 - d_params.particle_rad);
-  curr_particle.y = min(max(curr_particle.y, -d_params.height / 2 + d_params.particle_rad),
+  next_particle.y = min(max(next_particle.y, -d_params.height / 2 + d_params.particle_rad),
     d_params.height / 2 - d_params.particle_rad);
-  curr_particle.z = min(max(curr_particle.z, -d_params.depth / 2 + d_params.particle_rad),
+  next_particle.z = min(max(next_particle.z, -d_params.depth / 2 + d_params.particle_rad),
     d_params.depth / 2 - d_params.particle_rad);
-  d_params.curr_particles[d_idx] = curr_particle;
+  d_params.curr_particles[d_idx] = next_particle;
 }
 
 __global__ void update_kernel()
@@ -138,11 +129,7 @@ __global__ void update_kernel()
   int d_idx = d_off + t_idx;
 
   for (int i = 0; i < d_params.intermediate_steps; i++) {
-    move(t_idx, b_idx, d_off, d_idx);
-    __syncthreads();
-    resolve_collisions(t_idx, b_idx, d_off, d_idx);
-    __syncthreads();
-    apply_border(t_idx, b_idx, d_off, d_idx);
+    update_iteration(t_idx, b_idx, d_off, d_idx);
     __syncthreads();
   }
 }
