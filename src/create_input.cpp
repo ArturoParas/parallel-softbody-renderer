@@ -290,6 +290,10 @@ void write_to_file(
   const std::vector<bool>& indicators, const std::vector<int>& rdonly_map,
   const std::vector<int>& nbors_map, const std::string file)
 {
+  std::cout << "Particles per block = " << threads_per_block << std::endl;
+  std::cout << "Max rdonly per block = " << max_rdonly_per_block << std::endl;
+  std::cout << "Max nbors per block = " << max_nbors_per_block << std::endl;
+
   std::ofstream of ("../inputs/" + file);
 
   of << rest_len << " " << threads_per_block << " " << num_blocks << " " << max_pts << " "

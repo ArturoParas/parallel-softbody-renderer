@@ -26,13 +26,17 @@ if (code != cudaSuccess)
 #define cudaCheckError(ans) ans
 #endif
 
+#define PARTICLES_PER_BLOCK 320
+#define MAX_RDONLY_PER_BLOCK 380
+#define MAX_NBORS_PER_BLOCK 8320
+
 __constant__ GlobalConstants d_params;
 
-__device__ __inline__ void update_iteration(
-  const int t_idx, const int b_idx, const int d_off, const int d_idx)
+__device__ __inline__ float3 update_iteration(
+  const int t_idx, const int b_idx, const int d_off, const int d_idx, float3 prev_particle,
+  float3* s_curr_particles, const int16_t* s_nbor_map)
 {
-  float3 prev_particle = d_params.prev_particles[d_idx];
-  float3 curr_particle = d_params.curr_particles[d_idx];
+  float3 curr_particle = s_curr_particles[t_idx];
   float3 next_particle = curr_particle;
 
   float dx = curr_particle.x - prev_particle.x;
@@ -45,17 +49,9 @@ __device__ __inline__ void update_iteration(
   next_particle.z += dz;
 
   for (int nbor = 0; nbor < d_params.max_nbors_per_particle; nbor++) {
-    int n_key = d_params.nbor_map[d_off * d_params.max_nbors_per_particle
-      + nbor * d_params.particles_per_block + t_idx];
+    int n_key = s_nbor_map[nbor * d_params.particles_per_block + t_idx];
     if (n_key >= 0) {
-      int n_idx = 0;
-      if (n_key < d_params.particles_per_block) {
-        n_idx = d_off + n_key;
-      } else {
-        n_idx = d_params.rdonly_nbors[b_idx * d_params.max_rdonly_per_block + n_key
-          - d_params.particles_per_block];
-      }
-      float3 nbor_particle = d_params.curr_particles[n_idx];
+      float3 nbor_particle = s_curr_particles[n_key];
 
       float disp_x = nbor_particle.x - curr_particle.x;
       float disp_y = nbor_particle.y - curr_particle.y;
@@ -77,25 +73,16 @@ __device__ __inline__ void update_iteration(
   }
   __syncthreads();
 
-  d_params.prev_particles[d_idx] = curr_particle;
-  d_params.curr_particles[d_idx] = next_particle;
+  s_curr_particles[t_idx] = next_particle;
   __syncthreads();
 
+  prev_particle = curr_particle;
   curr_particle = next_particle;
-  next_particle = curr_particle;
 
   for (int nbor = 0; nbor < d_params.max_nbors_per_particle; nbor++) {
-    int n_key = d_params.nbor_map[d_off * d_params.max_nbors_per_particle
-      + nbor * d_params.particles_per_block + t_idx];
+    int n_key = s_nbor_map[nbor * d_params.particles_per_block + t_idx];
     if (n_key >= 0) {
-      int n_idx = 0;
-      if (n_key < d_params.particles_per_block) {
-        n_idx = d_off + n_key;
-      } else {
-        n_idx = d_params.rdonly_nbors[b_idx * d_params.max_rdonly_per_block + n_key
-          - d_params.particles_per_block];
-      }
-      float3 nbor_particle = d_params.curr_particles[n_idx];
+      float3 nbor_particle = s_curr_particles[n_key];
 
       float disp_x = nbor_particle.x - curr_particle.x;
       float disp_y = nbor_particle.y - curr_particle.y;
@@ -118,7 +105,9 @@ __device__ __inline__ void update_iteration(
     d_params.height / 2 - d_params.particle_rad);
   next_particle.z = min(max(next_particle.z, -d_params.depth / 2 + d_params.particle_rad),
     d_params.depth / 2 - d_params.particle_rad);
-  d_params.curr_particles[d_idx] = next_particle;
+  s_curr_particles[t_idx] = next_particle;
+
+  return prev_particle;
 }
 
 __global__ void update_kernel()
@@ -128,10 +117,29 @@ __global__ void update_kernel()
   int d_off = b_idx * blockDim.x;
   int d_idx = d_off + t_idx;
 
+  __shared__ float3 s_curr_particles[PARTICLES_PER_BLOCK + MAX_RDONLY_PER_BLOCK];
+  __shared__ int16_t s_nbor_map[MAX_NBORS_PER_BLOCK];
+
+  float3 prev_particle = d_params.prev_particles[d_idx];
+  s_curr_particles[t_idx] = d_params.curr_particles[d_idx];
+
+  for (int nbor = 0; nbor < d_params.max_nbors_per_particle; nbor++) {
+    int s_idx = nbor * d_params.particles_per_block + t_idx;
+    int n_key = d_params.nbor_map[d_off * d_params.max_nbors_per_particle + s_idx];
+    s_nbor_map[s_idx] = n_key;
+    if (n_key >= d_params.particles_per_block) {
+      s_curr_particles[n_key] = d_params.curr_particles[d_params.rdonly_nbors[b_idx * d_params.max_rdonly_per_block + n_key - d_params.particles_per_block]];
+    }
+  }
+  __syncthreads();
+
   for (int i = 0; i < d_params.intermediate_steps; i++) {
-    update_iteration(t_idx, b_idx, d_off, d_idx);
+    prev_particle = update_iteration(t_idx, b_idx, d_off, d_idx, prev_particle, s_curr_particles, s_nbor_map);
     __syncthreads();
   }
+
+  d_params.prev_particles[d_idx] = prev_particle;
+  d_params.curr_particles[d_idx] = s_curr_particles[t_idx];
 }
 
 void solver_update(GlobalConstants& h_params, float* h_curr_particles)
