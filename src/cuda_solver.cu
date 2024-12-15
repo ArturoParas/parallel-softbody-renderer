@@ -99,33 +99,36 @@ __global__ void update_kernel()
 
 void solver_update(GlobalConstants& h_params, float* h_curr_particles)
 {
-  /** TODO: Does the number of threads per block have to be known at compile time? */
   update_kernel<<<h_params.num_blocks, h_params.particles_per_block>>>();
-  // update_kernel<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>();
   cudaCheckError(cudaDeviceSynchronize());
   cudaCheckError(cudaMemcpy(h_curr_particles, h_params.curr_particles, h_params.max_particles * sizeof(float3), cudaMemcpyDeviceToHost));
 
-  // printf("\n");
-  // for (int i = 0; i < h_params.max_particles * 3; i += 3) {
-  //   printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
-  // }
+  printf("\n");
+  for (int i = 0; i < h_params.max_particles * 3; i += 3) {
+    printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
+  }
 }
 
 void solver_setup(
-  GlobalConstants& h_params, const float* h_curr_particles, const uint16_t* h_rdonly_nbors,
-  const uint16_t* h_nbor_map)
+  GlobalConstants& h_params, const float* h_curr_particles, const int16_t* h_rdonly_nbors,
+  const int16_t* h_nbor_map)
 {
   cudaCheckError(cudaMalloc(&h_params.curr_particles, h_params.max_particles * sizeof(float3)));
   cudaCheckError(cudaMalloc(&h_params.prev_particles, h_params.max_particles * sizeof(float3)));
-  cudaCheckError(cudaMalloc(&h_params.rdonly_nbors, h_params.max_rdonly * sizeof(uint16_t)));
-  cudaCheckError(cudaMalloc(&h_params.nbor_map, h_params.max_nbors * sizeof(uint16_t)));
+  cudaCheckError(cudaMalloc(&h_params.rdonly_nbors, h_params.max_rdonly * sizeof(int16_t)));
+  cudaCheckError(cudaMalloc(&h_params.nbor_map, h_params.max_nbors * sizeof(int16_t)));
   
   cudaCheckError(cudaMemcpy(h_params.curr_particles, h_curr_particles, h_params.max_particles * sizeof(float3), cudaMemcpyHostToDevice));
   cudaCheckError(cudaMemcpy(h_params.prev_particles, h_curr_particles, h_params.max_particles * sizeof(float3), cudaMemcpyHostToDevice));
-  cudaCheckError(cudaMemcpy(h_params.rdonly_nbors, h_rdonly_nbors, h_params.max_rdonly * sizeof(uint16_t), cudaMemcpyHostToDevice));
-  cudaCheckError(cudaMemcpy(h_params.nbor_map, h_nbor_map, h_params.max_nbors * sizeof(uint16_t), cudaMemcpyHostToDevice));
+  cudaCheckError(cudaMemcpy(h_params.rdonly_nbors, h_rdonly_nbors, h_params.max_rdonly * sizeof(int16_t), cudaMemcpyHostToDevice));
+  cudaCheckError(cudaMemcpy(h_params.nbor_map, h_nbor_map, h_params.max_nbors * sizeof(int16_t), cudaMemcpyHostToDevice));
 
   cudaCheckError(cudaMemcpyToSymbol(d_params, &h_params, sizeof(GlobalConstants)));
+
+  printf("\n");
+  for (int i = 0; i < 3 * h_params.max_particles; i += 3) {
+    printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
+  }
 }
 
 void solver_free(GlobalConstants& h_params)

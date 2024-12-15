@@ -31,14 +31,14 @@ struct GlobalConstants
 
   float3* curr_particles{NULL};
   float3* prev_particles{NULL};
-  uint16_t* rdonly_nbors{NULL};
-  uint16_t* nbor_map{NULL};
+  int16_t* rdonly_nbors{NULL};
+  int16_t* nbor_map{NULL};
 };
 
 void solver_update(GlobalConstants& h_params, float* h_curr_particles);
 
 void solver_setup(
-  GlobalConstants& h_params, const float* h_curr_particles, const uint16_t* h_rdonly_nbors,
-  const uint16_t* h_nbor_map);
+  GlobalConstants& h_params, const float* h_curr_particles, const int16_t* h_rdonly_nbors,
+  const int16_t* h_nbor_map);
 
 void solver_free(GlobalConstants& h_params);

@@ -85,10 +85,10 @@ int main()
 
     float* h_curr_particles = (float*)malloc(3 * h_params.max_particles * sizeof(float));
     uint8_t* particle_indicators = (uint8_t*)malloc(h_params.max_particles * sizeof(uint8_t));
-    uint16_t* h_rdonly_nbors = (uint16_t*)malloc(h_params.max_rdonly * sizeof(uint16_t));
-    uint16_t* h_nbor_map = (uint16_t*)malloc(h_params.max_nbors * sizeof(uint16_t));
+    int16_t* h_rdonly_nbors = (int16_t*)malloc(h_params.max_rdonly * sizeof(int16_t));
+    int16_t* h_nbor_map = (int16_t*)malloc(h_params.max_nbors * sizeof(int16_t));
 
-    for (int particle_idx = 0; particle_idx < h_params.max_particles; particle_idx += 3) {
+    for (int particle_idx = 0; particle_idx < 3 * h_params.max_particles; particle_idx += 3) {
         input_file >> h_curr_particles[particle_idx + 0];
         input_file >> h_curr_particles[particle_idx + 1];
         input_file >> h_curr_particles[particle_idx + 2];
@@ -96,10 +96,10 @@ int main()
     for (int particle_idx = 0; particle_idx < h_params.max_particles; particle_idx++) {
         input_file >> particle_indicators[particle_idx];
     }
-    for (int rdonly_idx; rdonly_idx < h_params.max_rdonly; rdonly_idx++) {
+    for (int rdonly_idx = 0; rdonly_idx < h_params.max_rdonly; rdonly_idx++) {
         input_file >> h_rdonly_nbors[rdonly_idx];
     }
-    for (int nbor_idx; nbor_idx < h_params.max_nbors; nbor_idx++) {
+    for (int nbor_idx = 0; nbor_idx < h_params.max_nbors; nbor_idx++) {
         input_file >> h_nbor_map[nbor_idx];
     }
 
@@ -232,5 +232,3 @@ int main()
 
     return 0;
 }
-
-
