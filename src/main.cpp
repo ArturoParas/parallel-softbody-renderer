@@ -30,7 +30,7 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-#define DEBUG
+// #define DEBUG
 #ifdef DEBUG
 #define cudaCheckError(ans)  cudaAssert((ans), __FILE__, __LINE__);
 inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -178,40 +178,40 @@ int main(int argc, char* argv[])
     contextsettings.minorVersion = 6;
     contextsettings.depthBits = 24;
     /** TODO: Do the width and height need to be known at compile time? */
-    sf::Window window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "3D OpenGL",
-        sf::Style::Default,contextsettings);
-    sf::Clock clock;
+    // sf::Window window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "3D OpenGL",
+    //     sf::Style::Default,contextsettings);
+    // sf::Clock clock;
 
-    int glewInitResult;
-    if((glewInitResult = glewInit()) != GLEW_OK){
-        std::cerr << "Failed to Initialize Glew (" << glewInitResult  << ")\n";
-        return -1;
-    }
+    // int glewInitResult;
+    // if((glewInitResult = glewInit()) != GLEW_OK){
+    //     std::cerr << "Failed to Initialize Glew (" << glewInitResult  << ")\n";
+    //     return -1;
+    // }
 
-    glEnable(GL_DEPTH_TEST);
+    // glEnable(GL_DEPTH_TEST);
 
-    //Shaders
-    Shader shader(ReadTextFile("../src/Shaders/vertex.glsl"),
-        ReadTextFile("../src/Shaders/fragment.glsl"));
-    shader.Use();
-    shader.SetFloatParam("ambientStrength", 0.5f);
-    shader.SetVec3Param("lightColor", glm::vec3(1.f));
+    // //Shaders
+    // Shader shader(ReadTextFile("../src/Shaders/vertex.glsl"),
+    //     ReadTextFile("../src/Shaders/fragment.glsl"));
+    // shader.Use();
+    // shader.SetFloatParam("ambientStrength", 0.5f);
+    // shader.SetVec3Param("lightColor", glm::vec3(1.f));
 
-    //Models
-    Model model("../tests/particle.fbx");
+    // //Models
+    // Model model("../tests/particle.fbx");
 
-    //Objects
-    std::vector<Object> objects;
+    // //Objects
+    // std::vector<Object> objects;
 
-    for (int i = 0; i < h_params.max_particles; i++) {
-        if (particle_indicators[i]) {
-            objects.emplace_back(&model, glm::vec3(5.f * i, 0.f, 0.f), glm::vec3(0.f),
-                glm::vec3(h_params.particle_rad), i);
-        }
-    }
+    // for (int i = 0; i < h_params.max_particles; i++) {
+    //     if (particle_indicators[i]) {
+    //         objects.emplace_back(&model, glm::vec3(5.f * i, 0.f, 0.f), glm::vec3(0.f),
+    //             glm::vec3(h_params.particle_rad), i);
+    //     }
+    // }
 
-    //Camera
-    Camera camera(glm::vec3(10.f, 0.f, 70.f));
+    // //Camera
+    // Camera camera(glm::vec3(10.f, 0.f, 70.f));
 
     //Main Loop
     bool isFirstMouse = true;
@@ -225,91 +225,93 @@ int main(int argc, char* argv[])
     const auto total_start = std::chrono::steady_clock::now();
     while (benchmark_idx < benchmark_iters) {
         benchmark_idx++;
-        float dt = clock.restart().asSeconds();
+        // float dt = clock.restart().asSeconds();
 
-        sf::Event event;
-        while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed) {
-                window.close();
-            }
-            else if (event.type == sf::Event::Resized) {
-                glViewport(0, 0, window.getSize().x, window.getSize().y);
-            }
-        }
+        // sf::Event event;
+        // while (window.pollEvent(event)) {
+        //     if (event.type == sf::Event::Closed) {
+        //         window.close();
+        //     }
+        //     else if (event.type == sf::Event::Resized) {
+        //         glViewport(0, 0, window.getSize().x, window.getSize().y);
+        //     }
+        // }
 
-        camera.UpdateDirectionVectors();
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
-            camera.position += camera.Forward() * MOVE_SPEED * dt;
-        }
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
-            camera.position -= camera.Right() * MOVE_SPEED * dt;
-        }
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
-            camera.position -= camera.Forward() * MOVE_SPEED * dt;
-        }
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-            camera.position += camera.Right() * MOVE_SPEED * dt;
-        }
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
-          camera.position += camera.Up() * MOVE_SPEED * dt;
-        }
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) {
-          camera.position -= camera.Up() * MOVE_SPEED * dt;
-        }
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) {
-            window.close();
-        }
+        // camera.UpdateDirectionVectors();
+        // if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+        //     camera.position += camera.Forward() * MOVE_SPEED * dt;
+        // }
+        // if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+        //     camera.position -= camera.Right() * MOVE_SPEED * dt;
+        // }
+        // if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+        //     camera.position -= camera.Forward() * MOVE_SPEED * dt;
+        // }
+        // if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+        //     camera.position += camera.Right() * MOVE_SPEED * dt;
+        // }
+        // if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
+        //   camera.position += camera.Up() * MOVE_SPEED * dt;
+        // }
+        // if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) {
+        //   camera.position -= camera.Up() * MOVE_SPEED * dt;
+        // }
+        // if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) {
+        //     std::cout << "Stopped on iteration " << benchmark_idx << std::endl;
+        //     window.close();
+        // }
 
-        if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) {
-            if (isFirstMouse) {
-                lastMousePos = sf::Mouse::getPosition(window);
-                isFirstMouse = false;
-                window.setMouseCursorVisible(false);
-            } else {
-                sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-                int xOffset = mousePos.x - lastMousePos.x;
-                int yOffset = lastMousePos.y - mousePos.y;
+        // if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) {
+        //     if (isFirstMouse) {
+        //         lastMousePos = sf::Mouse::getPosition(window);
+        //         isFirstMouse = false;
+        //         window.setMouseCursorVisible(false);
+        //     } else {
+        //         sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+        //         int xOffset = mousePos.x - lastMousePos.x;
+        //         int yOffset = lastMousePos.y - mousePos.y;
 
-                camera.yaw += xOffset * MOUSE_SENSITIVITY * dt;
-                camera.pitch += yOffset * MOUSE_SENSITIVITY * dt;
+        //         camera.yaw += xOffset * MOUSE_SENSITIVITY * dt;
+        //         camera.pitch += yOffset * MOUSE_SENSITIVITY * dt;
 
-                sf::Mouse::setPosition(lastMousePos, window);
-            }
-        } else {
-            isFirstMouse = true;
-            window.setMouseCursorVisible(true);
-        }
+        //         sf::Mouse::setPosition(lastMousePos, window);
+        //     }
+        // } else {
+        //     isFirstMouse = true;
+        //     window.setMouseCursorVisible(true);
+        // }
 
         const auto compute_start = std::chrono::steady_clock::now();
-        kernel_time += solver_update(h_params, h_curr_particles);
+        // kernel_time += solver_update_shared(h_params, h_curr_particles);
+        kernel_time += solver_update_device(h_params, h_curr_particles);
         const auto compute_end = std::chrono::steady_clock::now();
         compute_time += std::chrono::duration_cast<std::chrono::duration<double>>(compute_end - compute_start).count();
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader.Use();
-        shader.SetMat4Param("projection",camera.GetProjectionMatrix((float)window.getSize().x,(float)window.getSize().y));
-        shader.SetMat4Param("view",camera.GetViewMatrix());
-        shader.SetVec3Param("lightPos",camera.position);
+        // shader.Use();
+        // shader.SetMat4Param("projection",camera.GetProjectionMatrix((float)window.getSize().x,(float)window.getSize().y));
+        // shader.SetMat4Param("view",camera.GetViewMatrix());
+        // shader.SetVec3Param("lightPos",camera.position);
 
-        const auto draw_start = std::chrono::steady_clock::now();
-        for (int i = 0 ; i < objects.size(); i++){
-            Object& obj = objects[i];
-            obj.position.x = h_curr_particles[3 * obj.tag + 0];
-            obj.position.y = h_curr_particles[3 * obj.tag + 1];
-            obj.position.z = h_curr_particles[3 * obj.tag + 2];
+        // const auto draw_start = std::chrono::steady_clock::now();
+        // for (int i = 0 ; i < objects.size(); i++){
+        //     Object& obj = objects[i];
+        //     obj.position.x = h_curr_particles[3 * obj.tag + 0];
+        //     obj.position.y = h_curr_particles[3 * obj.tag + 1];
+        //     obj.position.z = h_curr_particles[3 * obj.tag + 2];
 
-            obj.Draw(shader, glm::vec3(0.4f, 0.4f, 0.8f));
-        }
+        //     obj.Draw(shader, glm::vec3(0.4f, 0.4f, 0.8f));
+        // }
 
-        window.display();
-        const auto draw_end = std::chrono::steady_clock::now();
-        draw_time += std::chrono::duration_cast<std::chrono::duration<double>>(draw_end - draw_start).count();
+        // window.display();
+        // const auto draw_end = std::chrono::steady_clock::now();
+        // draw_time += std::chrono::duration_cast<std::chrono::duration<double>>(draw_end - draw_start).count();
         // std::this_thread::sleep_for(std::chrono::milliseconds((int)(h_params.dt * 1000)));
     }
-    if (window.isOpen()) {
-        window.close();
-    }
+    // if (window.isOpen()) {
+    //     window.close();
+    // }
     const auto total_end = std::chrono::steady_clock::now();
     total_time = std::chrono::duration_cast<std::chrono::duration<double>>(total_end - total_start).count();
     std::cout << std::endl;
