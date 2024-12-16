@@ -11,7 +11,7 @@
 #define max(a, b) (a > b ? a : b)
 #define abs(a) (a < 0 ?  -a : a)
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define cudaCheckError(ans)  cudaAssert((ans), __FILE__, __LINE__);
 inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -266,6 +266,39 @@ __global__ void update_kernel_shared()
   d_params.curr_particles[d_idx] = s_curr_particles[t_idx];
 }
 
+__global__ void update_kernel_dynamic_shared()
+{
+  int t_idx = threadIdx.x;
+  int b_idx = blockIdx.x;
+  int d_off = b_idx * blockDim.x;
+  int d_idx = d_off + t_idx;
+
+  extern __shared__ float3 s[];
+  float3* s_curr_particles = s;
+  int16_t* s_nbor_map = (int16_t*)&s_curr_particles[d_params.particles_per_block + d_params.max_rdonly_per_block];
+
+  float3 prev_particle = d_params.prev_particles[d_idx];
+  s_curr_particles[t_idx] = d_params.curr_particles[d_idx];
+
+  for (int nbor = 0; nbor < d_params.max_nbors_per_particle; nbor++) {
+    int s_idx = nbor * d_params.particles_per_block + t_idx;
+    int n_key = d_params.nbor_map[d_off * d_params.max_nbors_per_particle + s_idx];
+    s_nbor_map[s_idx] = n_key;
+    if (n_key >= d_params.particles_per_block) {
+      s_curr_particles[n_key] = d_params.curr_particles[d_params.rdonly_nbors[b_idx * d_params.max_rdonly_per_block + n_key - d_params.particles_per_block]];
+    }
+  }
+  __syncthreads();
+
+  for (int i = 0; i < d_params.intermediate_steps; i++) {
+    prev_particle = update_iteration_shared(t_idx, b_idx, d_off, d_idx, prev_particle, s_curr_particles, s_nbor_map);
+    __syncthreads();
+  }
+
+  d_params.prev_particles[d_idx] = prev_particle;
+  d_params.curr_particles[d_idx] = s_curr_particles[t_idx];
+}
+
 double solver_update_device(GlobalConstants& h_params, float* h_curr_particles)
 {
   const auto kernel_start = std::chrono::steady_clock::now();
@@ -300,6 +333,23 @@ double solver_update_shared(GlobalConstants& h_params, float* h_curr_particles)
   // for (int i = 0; i < h_params.max_particles * 3; i += 3) {
   //   printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
   // }
+}
+
+double solver_update_dynamic_shared(GlobalConstants& h_params, float* h_curr_particles)
+{
+  const auto kernel_start = std::chrono::steady_clock::now();
+  update_kernel_dynamic_shared<<<h_params.num_blocks, h_params.particles_per_block, (h_params.particles_per_block + h_params.max_rdonly_per_block) * sizeof(float3) + h_params.max_nbors_per_block * sizeof(int16_t)>>>();
+  const auto kernel_end = std::chrono::steady_clock::now();
+  const double kernel_time = std::chrono::duration_cast<std::chrono::duration<double>>(kernel_end - kernel_start).count();
+  cudaCheckError(cudaDeviceSynchronize());
+  cudaCheckError(cudaMemcpy(h_curr_particles, h_params.curr_particles,
+    h_params.max_particles * sizeof(float3), cudaMemcpyDeviceToHost));
+
+  return kernel_time;
+  printf("\n");
+  for (int i = 0; i < h_params.max_particles * 3; i += 3) {
+    printf("h_curr_particles[%d] = (%f, %f, %f)\n", i / 3, h_curr_particles[i], h_curr_particles[i + 1], h_curr_particles[i + 2]);
+  }
 }
 
 void solver_setup(
