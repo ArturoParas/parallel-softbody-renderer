@@ -1,0 +1,53 @@
+#include <Camera.h>
+
+#include <glm/gtc/matrix_transform.hpp>
+
+const glm::vec3 Camera::WorldUp{0.f,1.f,0.f};
+
+
+Camera::Camera(glm::vec3 position, float pitch, float yaw, float fov)
+    : position(position),  pitch(pitch), yaw(yaw), fov(fov),forward(),right(),up()
+{
+}
+
+
+glm::mat4 Camera::GetProjectionMatrix(float width, float height)
+{
+    return glm::perspective(glm::radians(fov),width/height,0.1f,2000.0f);
+}
+
+void Camera::UpdateDirectionVectors()
+{
+
+    forward = glm::normalize(glm::vec3(
+
+        glm::cos(glm::radians(yaw))* glm::cos(glm::radians(pitch)),
+        glm::sin(glm::radians(pitch)),
+        glm::sin(glm::radians(yaw))* glm::cos(glm::radians(pitch))
+    ));
+
+    right = glm::normalize(glm::cross(forward,WorldUp));
+
+    up = glm::normalize(glm::cross(right,forward));
+
+}
+
+glm::mat4 Camera::GetViewMatrix()
+{
+    return glm::lookAt(position, position + forward, up);
+}
+
+glm::vec3 Camera::Forward()
+{
+    return forward;
+}
+
+glm::vec3 Camera::Right()
+{
+    return right;
+}
+
+glm::vec3 Camera::Up()
+{
+    return up;
+}

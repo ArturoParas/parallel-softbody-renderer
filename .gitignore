@@ -1,2 +1,7 @@
 build
 .vscode
+__pycache__
+env
+.idea/
+.DS_Store
+inputs
